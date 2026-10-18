@@ -57,6 +57,9 @@ namespace FastbootStudio.Mobile.Core
             this.backupRoot = backupRoot ?? BackupRoot;
         }
 
+        /// <summary>The by-name folder found by <see cref="Partitions"/>, or null before.</summary>
+        public string ByNameDir => byName;
+
         /// <summary>The by-name folder and the partitions in it.</summary>
         public List<string> Partitions()
         {

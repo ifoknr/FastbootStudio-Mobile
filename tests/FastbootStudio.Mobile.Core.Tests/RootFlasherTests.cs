@@ -206,3 +206,82 @@ namespace FastbootStudio.Mobile.Core.Tests
         }
     }
 }
+
+namespace FastbootStudio.Mobile.Core.Tests
+{
+    public class AnyKernelInstallerTests
+    {
+        /// <summary>An AnyKernel3-shaped zip whose installer writes a marker into boot_a, as a real one rewrites boot.</summary>
+        static string Zip(Samples s, FilePhone phone, string script = null, string installer = null)
+        {
+            string path = Path.Combine(s.Root, "ak3.zip");
+            using (System.IO.Compression.ZipArchive zip = System.IO.Compression.ZipFile.Open(path, System.IO.Compression.ZipArchiveMode.Create))
+            {
+                void Write(string name, string text)
+                {
+                    using StreamWriter w = new StreamWriter(zip.CreateEntry(name).Open());
+                    w.Write(text);
+                }
+                Write("anykernel.sh", script ?? Samples.CorotScript);
+                Write("META-INF/com/google/android/update-binary", installer ??
+                    "#!/sbin/sh\necho \"ui_print AnyKernel3 test\"\necho \"ui_print zip=$3\"\nprintf 'NEWKERNEL' | dd of='" + phone.ByName + "/boot_a' bs=1 seek=64 conv=notrunc 2>/dev/null\nexit 0\n");
+            }
+            return path;
+        }
+
+        [Fact]
+        public void A_fitting_zip_is_installed_after_a_backup_and_the_change_is_seen()
+        {
+            using FilePhone phone = new FilePhone(("boot_a", 8192), ("init_boot_a", 4096), ("vendor_boot_a", 4096), ("dtbo_a", 4096));
+            using Samples s = new Samples();
+            string path = Zip(s, phone);
+            AnyKernelZip zip = AnyKernelZip.Inspect(path, Samples.Phone);
+            Assert.Equal(CheckLevel.Notice, zip.Result.Verdict);
+            byte[] before = phone.Partition("boot_a");
+            AnyKernelInstaller installer = new AnyKernelInstaller(phone, phone.Flasher(), Path.Combine(phone.Root, "work"));
+            Assert.Equal("not-confirmed", installer.Install(path, zip, new Consent(), Samples.Phone, "_a").Error);
+
+            KernelOutcome outcome = installer.Install(path, zip, new Consent { NoticeAccepted = true }, Samples.Phone, "_a");
+            Assert.Null(outcome.Error);
+            Assert.True(outcome.Installed);
+            Assert.True(outcome.Changed);
+            Assert.Contains("AnyKernel3 test", outcome.Log);
+            Assert.Equal("NEWKERNEL", System.Text.Encoding.ASCII.GetString(phone.Partition("boot_a"), 64, 9));
+            BackupFolder backup = BackupFolder.Read(outcome.BackupFolder);
+            Assert.Equal(new[] { "boot_a.img", "dtbo_a.img", "init_boot_a.img", "vendor_boot_a.img" }, backup.Sums.Keys.OrderBy(k => k));
+            Assert.Equal(before, File.ReadAllBytes(Path.Combine(outcome.BackupFolder, "boot_a.img")));
+            Assert.False(Directory.Exists(Path.Combine(phone.Root, "work")));
+        }
+
+        [Fact]
+        public void A_zip_for_another_device_needs_developer_mode_and_the_name()
+        {
+            using FilePhone phone = new FilePhone(("boot_a", 8192));
+            using Samples s = new Samples();
+            string other = Samples.CorotScript.Replace("device.name1=corot", "device.name1=sweet").Replace("device.name2=corotin", "device.name2=sweetin");
+            string path = Zip(s, phone, other);
+            AnyKernelZip zip = AnyKernelZip.Inspect(path, Samples.Phone);
+            AnyKernelInstaller installer = new AnyKernelInstaller(phone, phone.Flasher(), Path.Combine(phone.Root, "work"));
+            Assert.Equal("not-confirmed", installer.Install(path, zip, new Consent { TypedName = "boot", NoticeAccepted = true }, Samples.Phone, "_a").Error);
+            Assert.Equal("not-confirmed", installer.Install(path, zip, new Consent { DeveloperMode = true }, Samples.Phone, "_a").Error);
+            Assert.True(installer.Install(path, zip, new Consent { DeveloperMode = true, TypedName = "boot" }, Samples.Phone, "_a").Installed);
+        }
+
+        [Fact]
+        public void A_failing_installer_is_reported_and_a_changed_zip_is_not_run()
+        {
+            using FilePhone phone = new FilePhone(("boot_a", 8192));
+            using Samples s = new Samples();
+            string path = Zip(s, phone, installer: "#!/sbin/sh\necho 'ui_print Unsupported device. Aborting...'\necho 'abort' >&2\nexit 1\n");
+            AnyKernelZip zip = AnyKernelZip.Inspect(path, Samples.Phone);
+            AnyKernelInstaller installer = new AnyKernelInstaller(phone, phone.Flasher(), Path.Combine(phone.Root, "work"));
+            KernelOutcome failed = installer.Install(path, zip, new Consent { NoticeAccepted = true }, Samples.Phone, "_a");
+            Assert.False(failed.Installed);
+            Assert.StartsWith("install-failed", failed.Error);
+            Assert.Contains("Unsupported device. Aborting...", failed.Log);
+
+            File.AppendAllText(path, "x");
+            Assert.Equal("file-changed", installer.Install(path, zip, new Consent { NoticeAccepted = true }, Samples.Phone, "_a").Error);
+        }
+    }
+}
