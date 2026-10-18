@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <RootNamespace>FastbootStudio.Mobile.Core</RootNamespace>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="FastbootStudio.Mobile.Core.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The same image checks, hashing and boot-image analysis as Fastboot Studio on Windows. -->
+    <ProjectReference Include="..\..\external\FastbootStudio\src\FastbootEnhance.Core\FastbootEnhance.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,3 @@
+[submodule "external/FastbootStudio"]
+	path = external/FastbootStudio
+	url = https://github.com/ifoknr/FastbootStudio
