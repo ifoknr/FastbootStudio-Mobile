@@ -84,7 +84,7 @@ namespace FastbootStudio.Mobile.Core
             zip.CheckDevice(phone);
             zip.CheckAndroid(phone);
             if (string.IsNullOrEmpty((expectedSha256 ?? "").Trim()))
-                result.Add(CheckLevel.Warn, CheckCode.NoFingerprint, Path.GetFileName(zipPath));
+                result.Add(CheckLevel.Notice, CheckCode.NoFingerprint, Path.GetFileName(zipPath));
             return zip;
         }
 
@@ -146,11 +146,12 @@ namespace FastbootStudio.Mobile.Core
                 return;
             }
             string listed = string.Join(", ", Devices);
-            string[] mine = { phone?.Device, phone?.Product };
-            if (mine.Any(name => !string.IsNullOrEmpty(name) && Devices.Contains(name, StringComparer.OrdinalIgnoreCase)))
-                Result.Add(CheckLevel.Ok, CheckCode.DeviceListed, listed, phone.Device ?? phone.Product);
+            // The names AnyKernel3's own device check compares, so this is never stricter than the zip.
+            string match = phone?.DeviceNames.FirstOrDefault(name => !string.IsNullOrEmpty(name) && Devices.Contains(name, StringComparer.OrdinalIgnoreCase));
+            if (match != null)
+                Result.Add(CheckLevel.Ok, CheckCode.DeviceListed, listed, match);
             else
-                Result.Add(CheckLevel.Block, CheckCode.DeviceNotListed, listed, phone?.Device ?? "");
+                Result.AddOverridable(CheckCode.DeviceNotListed, listed, phone?.Device ?? "");
         }
 
         /// <summary>supported.versions: "13", "11 - 14", "11-14"; empty means any Android.</summary>
@@ -167,7 +168,7 @@ namespace FastbootStudio.Mobile.Core
             if (phoneVersion >= low && phoneVersion <= high)
                 Result.Add(CheckLevel.Ok, CheckCode.AndroidSupported, phone.AndroidRelease, SupportedVersions);
             else
-                Result.Add(CheckLevel.Block, CheckCode.AndroidNotSupported, phone.AndroidRelease, SupportedVersions);
+                Result.AddOverridable(CheckCode.AndroidNotSupported, phone.AndroidRelease, SupportedVersions);
         }
 
         static bool TryMajor(string version, out int major)

@@ -104,12 +104,12 @@ namespace FastbootStudio.Mobile.Core.Tests
         }
 
         [Fact]
-        public void A_backup_without_a_serial_is_only_a_warning_when_model_and_product_agree()
+        public void A_backup_without_a_serial_is_only_a_notice_when_model_and_product_agree()
         {
             using Samples s = new Samples();
             BackupFolder same = s.Backup("", "Xiaomi 13T Pro", "corot_global", ("dtbo_a.img", Samples.Dtbo()));
             CheckResult r = ImageCheck.FromBackup(same, "dtbo_a.img", "dtbo_a", 8 << 20, Samples.Phone);
-            Assert.Equal(CheckLevel.Warn, r.Verdict);
+            Assert.Equal(CheckLevel.Notice, r.Verdict);
             Assert.True(r.Has(CheckCode.PhoneUnknown));
 
             BackupFolder other = s.Backup("", "Redmi Note 12", "tapas_global", ("dtbo_a.img", Samples.Dtbo()));
@@ -194,8 +194,8 @@ namespace FastbootStudio.Mobile.Core.Tests
             Assert.True(zip.Result.CanFlash);
             Assert.True(zip.Result.Has(CheckCode.DeviceListed));
             Assert.True(zip.Result.Has(CheckCode.AndroidSupported));
-            // No published hash pasted: it still asks for the name to be typed.
-            Assert.Equal(CheckLevel.Warn, zip.Result.Verdict);
+            // No published hash pasted: a light notice, Continue or Cancel.
+            Assert.Equal(CheckLevel.Notice, zip.Result.Verdict);
         }
 
         [Fact]
@@ -250,6 +250,51 @@ namespace FastbootStudio.Mobile.Core.Tests
         public void Zip_entries_stay_inside_the_folder(string name, bool safe)
         {
             Assert.Equal(safe, AnyKernelZip.SafeEntry(name));
+        }
+    }
+
+    public class DeveloperModeTests
+    {
+        [Fact]
+        public void Developer_mode_lets_a_zip_for_another_device_through_with_the_name_typed()
+        {
+            using Samples s = new Samples();
+            string other = Samples.CorotScript.Replace("device.name1=corot", "device.name1=sweet").Replace("device.name2=corotin", "device.name2=sweetin");
+            CheckResult r = AnyKernelZip.Inspect(s.AnyKernel(other), Samples.Phone).Result;
+            Assert.False(r.CanFlashFor(false));
+            Assert.True(r.CanFlashFor(true));
+            Assert.Equal(CheckLevel.Warn, r.VerdictFor(true));
+        }
+
+        [Fact]
+        public void Developer_mode_never_lets_harmful_or_damaged_files_through()
+        {
+            using Samples s = new Samples();
+            Assert.False(AnyKernelZip.Inspect(s.AnyKernel(Samples.CorotScript, true, "../../etc/evil"), Samples.Phone).Result.CanFlashFor(true));
+            Assert.False(AnyKernelZip.Inspect(s.AnyKernel(null), Samples.Phone).Result.CanFlashFor(true));
+            Assert.False(AnyKernelZip.Inspect(s.AnyKernel(Samples.CorotScript), Samples.Phone, new string('a', 64)).Result.CanFlashFor(true));
+
+            BackupFolder other = s.Backup("9f8e7d6c", "Redmi Note 12", "tapas_global", ("init_boot_a.img", Samples.BootImage(false)));
+            Assert.False(ImageCheck.FromBackup(other, "init_boot_a.img", "init_boot_a", 8 << 20, Samples.Phone).CanFlashFor(true));
+
+            BackupFolder mine = s.Backup("a1b2c3d4", "Xiaomi 13T Pro", "corot_global", ("init_boot_a.img", Samples.BootImage(false)));
+            File.AppendAllText(Path.Combine(mine.Path, "init_boot_a.img"), "x");
+            Assert.False(ImageCheck.FromBackup(mine, "init_boot_a.img", "init_boot_a", 8 << 20, Samples.Phone).CanFlashFor(true));
+
+            Assert.False(ImageCheck.FromFile(s.File("v.img", Samples.Vbmeta()), "boot_a", 64 << 20, Samples.Phone).CanFlashFor(true));
+            Assert.False(ImageCheck.FromFile(s.File("p.img", new byte[4096]), "persist", 32 << 20, Samples.Phone).CanFlashFor(true));
+            Assert.False(ImageCheck.FromFile(s.File("big.img", Samples.Vbmeta()), "vbmeta_a", 1024, Samples.Phone).CanFlashFor(true));
+        }
+
+        [Fact]
+        public void A_custom_rom_codename_is_matched_like_anykernel3_does()
+        {
+            using Samples s = new Samples();
+            PhoneIdentity rom = new PhoneIdentity { Device = "corot_ext", Product = "lineage_corot", AndroidRelease = "14" };
+            rom.OtherDeviceNames.Add("corot");
+            CheckResult r = AnyKernelZip.Inspect(s.AnyKernel(Samples.CorotScript), rom).Result;
+            Assert.True(r.Has(CheckCode.DeviceListed));
+            Assert.True(r.CanFlashFor(false));
         }
     }
 

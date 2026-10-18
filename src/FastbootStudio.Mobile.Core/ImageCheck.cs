@@ -112,7 +112,7 @@ namespace FastbootStudio.Mobile.Core
             if ((modelKnown && backup.Model != phone.Model) || (productKnown && backup.Product != phone.Product))
                 result.Add(CheckLevel.Block, CheckCode.OtherPhone, backupPhone, thisPhone);
             else
-                result.Add(CheckLevel.Warn, CheckCode.PhoneUnknown, backupPhone, thisPhone);
+                result.Add(CheckLevel.Notice, CheckCode.PhoneUnknown, backupPhone, thisPhone);
         }
 
         /// <summary>What the file is, its size, and for boot images the kernel against the phone's.</summary>
@@ -151,9 +151,16 @@ namespace FastbootStudio.Mobile.Core
             };
             foreach (Finding finding in BootFlashCheck.Check(image, partition, facts, phone?.HasInitBoot ?? false))
             {
-                CheckLevel level = finding.Level == FindingLevel.Block ? CheckLevel.Block
-                    : finding.Level == FindingLevel.Warn ? CheckLevel.Warn : CheckLevel.Ok;
-                result.Add(level, CheckCode.BootCheck, new[] { finding.Code.ToString() }.Concat(finding.Values).ToArray());
+                string[] values = new[] { finding.Code.ToString() }.Concat(finding.Values).ToArray();
+                if (finding.Code == FindingCode.KmiMismatch)
+                    // Another kernel interface does not start with this phone's modules; a developer may know better.
+                    result.AddOverridable(CheckCode.BootCheck, values);
+                else if (finding.Level == FindingLevel.Block)
+                    // Not a boot image, a vendor_boot in boot, no kernel for boot: it cannot start at all.
+                    result.Add(CheckLevel.Block, CheckCode.BootCheck, values);
+                else
+                    // Another kernel version, an older patch level, another root manager: worth knowing.
+                    result.Add(finding.Level == FindingLevel.Warn ? CheckLevel.Notice : CheckLevel.Ok, CheckCode.BootCheck, values);
             }
         }
 

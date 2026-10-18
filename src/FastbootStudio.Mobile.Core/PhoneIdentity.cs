@@ -1,3 +1,6 @@
+using System.Collections.Generic;
+using System.Linq;
+
 namespace FastbootStudio.Mobile.Core
 {
     /// <summary>What the app knows about the phone it is checking a file against.</summary>
@@ -29,5 +32,16 @@ namespace FastbootStudio.Mobile.Core
 
         /// <summary>True when the phone has an init_boot partition.</summary>
         public bool HasInitBoot { get; set; }
+
+        /// <summary>
+        /// Other codenames the phone reports (ro.build.product, ro.product.vendor.device,
+        /// ro.product.system.device...): custom ROMs change some of them, and AnyKernel3 accepts
+        /// any one that is listed.
+        /// </summary>
+        public List<string> OtherDeviceNames { get; } = new List<string>();
+
+        /// <summary>Device, Product and the other codenames, without blanks or repeats.</summary>
+        public IEnumerable<string> DeviceNames =>
+            new[] { Device, Product }.Concat(OtherDeviceNames).Where(n => !string.IsNullOrEmpty(n)).Distinct();
     }
 }
