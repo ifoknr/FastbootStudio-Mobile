@@ -37,6 +37,7 @@ namespace FastbootStudio.Mobile.Core
         TooBig,
         EmptyFile,
         BootCheck,
+        KernelVersionDiffers,
         NotAnyKernel,
         UnsafeZipEntry,
         DeviceListed,
@@ -62,8 +63,8 @@ namespace FastbootStudio.Mobile.Core
 
         /// <summary>
         /// A Block that developer mode turns into a Warn: the file is not damaged or harmful,
-        /// it was only made for another device or Android version, or another kernel interface.
-        /// Damaged, tampered or harmful files are never overridable.
+        /// it was only made for another device or Android version. Damaged, tampered or harmful
+        /// files are never overridable.
         /// </summary>
         public bool DeveloperOverride { get; }
 

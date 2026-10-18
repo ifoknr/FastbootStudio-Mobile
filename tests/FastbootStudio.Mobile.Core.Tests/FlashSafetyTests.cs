@@ -253,6 +253,38 @@ namespace FastbootStudio.Mobile.Core.Tests
         }
     }
 
+    public class KernelVersionTests
+    {
+        static PhoneIdentity Running(string release) => new PhoneIdentity
+        {
+            Serial = "a1b2c3d4", Model = "Xiaomi 13T Pro", Device = "corot", Product = "corot_global",
+            AndroidRelease = "14", HasInitBoot = true, KernelRelease = release,
+        };
+
+        [Fact]
+        public void A_newer_kernel_on_the_same_interface_is_only_a_notice()
+        {
+            using Samples s = new Samples();
+            string path = s.File("boot.img", Samples.BootImage(true, "6.1.162-android14-11-gabcdef"));
+            CheckResult r = ImageCheck.FromFile(path, "boot_a", 64 << 20, Running("6.1.75-android14-11-g1234"));
+            Assert.Contains(r.Items, i => i.Code == CheckCode.KernelVersionDiffers && i.Level == CheckLevel.Notice
+                && i.Values[0] == "6.1.162" && i.Values[1] == "6.1.75");
+            Assert.True(r.CanFlash);
+            Assert.DoesNotContain(r.Items, i => i.Level == CheckLevel.Block);
+        }
+
+        [Fact]
+        public void Another_kernel_interface_needs_the_name_typed_but_is_not_refused()
+        {
+            using Samples s = new Samples();
+            string path = s.File("boot.img", Samples.BootImage(true, "6.6.30-android15-8-gabcdef"));
+            CheckResult r = ImageCheck.FromFile(path, "boot_a", 64 << 20, Running("6.1.75-android14-11-g1234"));
+            Assert.Contains(r.Items, i => i.Code == CheckCode.BootCheck && i.Values[0] == "KmiMismatch" && i.Level == CheckLevel.Warn);
+            Assert.Equal(CheckLevel.Warn, r.Verdict);
+            Assert.True(r.CanFlash);
+        }
+    }
+
     public class DeveloperModeTests
     {
         [Fact]

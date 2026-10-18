@@ -25,7 +25,7 @@ namespace FastbootStudio.Mobile.Core.Tests
         };
 
         /// <summary>A header-version-4 boot image: with a kernel it is a boot image, without one an init_boot.</summary>
-        public static byte[] BootImage(bool kernel)
+        public static byte[] BootImage(bool kernel, string release = null)
         {
             const int page = 4096;
             byte[] head = new byte[page];
@@ -37,6 +37,14 @@ namespace FastbootStudio.Mobile.Core.Tests
             head.CopyTo(image, 0);
             for (int i = page; i < image.Length; i++)
                 image[i] = (byte)(i * 7);
+            if (kernel && release != null)
+            {
+                // An uncompressed arm64 Image: "ARMd" at 56, then the version banner.
+                for (int i = page; i < page * 2; i++)
+                    image[i] = 0;
+                Encoding.ASCII.GetBytes("ARMd").CopyTo(image, page + 56);
+                Encoding.ASCII.GetBytes("Linux version " + release + " (b@h) #1 SMP PREEMPT\n").CopyTo(image, page + 64);
+            }
             return image;
         }
 

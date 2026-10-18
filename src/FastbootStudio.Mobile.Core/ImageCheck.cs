@@ -153,8 +153,9 @@ namespace FastbootStudio.Mobile.Core
             {
                 string[] values = new[] { finding.Code.ToString() }.Concat(finding.Values).ToArray();
                 if (finding.Code == FindingCode.KmiMismatch)
-                    // Another kernel interface does not start with this phone's modules; a developer may know better.
-                    result.AddOverridable(CheckCode.BootCheck, values);
+                    // Another kernel interface (android14-6.1 → android15-6.6) may not load this phone's
+                    // modules: a bootloop, which the automatic backup undoes. Not harmful, so the name is typed.
+                    result.Add(CheckLevel.Warn, CheckCode.BootCheck, values);
                 else if (finding.Level == FindingLevel.Block)
                     // Not a boot image, a vendor_boot in boot, no kernel for boot: it cannot start at all.
                     result.Add(CheckLevel.Block, CheckCode.BootCheck, values);
@@ -162,6 +163,21 @@ namespace FastbootStudio.Mobile.Core
                     // Another kernel version, an older patch level, another root manager: worth knowing.
                     result.Add(finding.Level == FindingLevel.Warn ? CheckLevel.Notice : CheckLevel.Ok, CheckCode.BootCheck, values);
             }
+
+            // 6.1.75 → 6.1.162 on the same interface is normal for custom kernels: shown, never in the way.
+            string imageVersion = Numbers(image.Kernel?.Release), phoneVersion = Numbers(phone?.KernelRelease);
+            if (FlashTargets.BaseName(partition) == "boot" && imageVersion != null && phoneVersion != null && imageVersion != phoneVersion
+                && !result.Items.Any(i => i.Code == CheckCode.BootCheck && (i.Values[0] == nameof(FindingCode.KmiMismatch) || i.Values[0] == nameof(FindingCode.KernelVersionMismatch))))
+                result.Add(CheckLevel.Notice, CheckCode.KernelVersionDiffers, imageVersion, phoneVersion);
+        }
+
+        /// <summary>"6.1.162-android14-11-g..." is "6.1.162"; null when it does not start with a version.</summary>
+        static string Numbers(string release)
+        {
+            if (string.IsNullOrEmpty(release))
+                return null;
+            string version = new string(release.TakeWhile(c => char.IsDigit(c) || c == '.').ToArray()).Trim('.');
+            return version.Contains('.') ? version : null;
         }
 
         static ImageKind Expected(string target)
