@@ -1,12 +1,26 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net8.0-android</TargetFramework>
-    <SupportedOSPlatformVersion>21</SupportedOSPlatformVersion>
+    <SupportedOSPlatformVersion>26</SupportedOSPlatformVersion>
     <OutputType>Exe</OutputType>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <ApplicationId>com.companyname.FastbootStudio.Mobile</ApplicationId>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>FastbootStudio.Mobile</RootNamespace>
+    <ApplicationId>com.ifoknr.fastbootstudio.mobile</ApplicationId>
+    <ApplicationTitle>Fastboot Studio</ApplicationTitle>
     <ApplicationVersion>1</ApplicationVersion>
-    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>
+    <AndroidPackageFormat>apk</AndroidPackageFormat>
+    <RuntimeIdentifiers>android-arm64;android-arm</RuntimeIdentifiers>
   </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FastbootStudio.Mobile.Core\FastbootStudio.Mobile.Core.csproj" />
+    <Reference Include="Mono.Android.Export" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The WebView UI; demo.js is only for previews in a desktop browser. -->
+    <AndroidAsset Include="ui\**" Exclude="ui\demo.js" />
+  </ItemGroup>
 </Project>

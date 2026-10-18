@@ -1,4 +1,3 @@
 <resources>
-    <string name="app_name">FastbootStudio.Mobile</string>
-    <string name="app_text">Hello, Android!</string>
+    <string name="app_name">Fastboot Studio</string>
 </resources>
