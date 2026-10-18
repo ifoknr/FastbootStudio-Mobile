@@ -13,6 +13,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="shims\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\FastbootStudio.Mobile.Core\FastbootStudio.Mobile.Core.csproj" />
   </ItemGroup>
 

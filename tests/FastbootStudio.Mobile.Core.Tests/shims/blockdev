@@ -1,0 +1,4 @@
+#!/bin/sh
+# Stand-in for toybox blockdev in tests: partitions are plain files there.
+[ "$1" = "--getsize64" ] && exec stat -c %s "$2"
+exit 1
