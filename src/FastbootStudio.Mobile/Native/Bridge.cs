@@ -530,7 +530,7 @@ namespace FastbootStudio.Mobile.Native
                         return new JsonObject { ["installed"] = installed, ["none"] = true };
                     if (!response.IsSuccessStatusCode)
                         throw new BridgeError("update-failed: " + (int)response.StatusCode);
-                    UpdateCheck.Release r = UpdateCheck.Parse(await response.Content.ReadAsStringAsync());
+                    UpdateCheck.Release r = UpdateCheck.Newest(await response.Content.ReadAsStringAsync(), installed);
                     if (r == null)
                         return new JsonObject { ["installed"] = installed, ["none"] = true };
                     bool newer = UpdateCheck.IsNewer(r.Version, installed);
