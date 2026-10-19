@@ -36,6 +36,38 @@ namespace FastbootStudio.Mobile.Native
             }
         }
 
+        /// <summary>Runs a long job, handing each line of its output to <paramref name="line"/> as it comes.</summary>
+        public ShellResult RunLines(string script, Action<string> line)
+        {
+            Log.Add("$ " + script);
+            try
+            {
+                using (Process p = Start())
+                {
+                    p.StandardInput.Write(script + "\nexit $?\n");
+                    p.StandardInput.Close();
+                    Task<string> error = p.StandardError.ReadToEndAsync();
+                    System.Text.StringBuilder all = new System.Text.StringBuilder();
+                    string l;
+                    while ((l = p.StandardOutput.ReadLine()) != null)
+                    {
+                        all.Append(l).Append('\n');
+                        line?.Invoke(l);
+                    }
+                    p.WaitForExit();
+                    ShellResult r = new ShellResult(p.ExitCode, all.ToString(), error.Result);
+                    if (!r.Ok)
+                        Log.Add("  exit " + r.ExitCode + (r.Error.Length > 0 ? ": " + r.Error.Trim() : ""));
+                    return r;
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Add("  su failed: " + e.Message);
+                return new ShellResult(-1, "", e.Message);
+            }
+        }
+
         /// <summary>
         /// Copies a file root can read into a file the app creates itself (so it carries the
         /// app's own SELinux label and owner), by streaming cat's output.

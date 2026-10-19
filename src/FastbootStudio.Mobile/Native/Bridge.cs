@@ -33,6 +33,7 @@ namespace FastbootStudio.Mobile.Native
         readonly Phone phone;
         readonly Settings settings;
         readonly Otg otg;
+        readonly Companion companion = new Companion(SuShell.Instance);
         readonly SemaphoreSlim busy = new SemaphoreSlim(1, 1);
         readonly Dictionary<string, Picked> picked = new Dictionary<string, Picked>(StringComparer.Ordinal);
         Pending pending;
@@ -123,6 +124,14 @@ namespace FastbootStudio.Mobile.Native
                     return KernelCheck(a);
                 case "kernel.run":
                     return Exclusive(() => KernelRun(a));
+                case "companion.find":
+                    // Only with root: without it the module is of no use, so it is never mentioned.
+                    return phone.Root ? companion.Find() : new JsonObject { ["installed"] = false };
+                case "companion.backup":
+                    return Exclusive(() => CompanionBackup(a));
+                case "companion.bundle":
+                    RequireRoot();
+                    return new JsonObject { ["file"] = companion.Bundle() };
                 case "backup.list":
                     return BackupList();
                 case "backup.create":
@@ -410,7 +419,7 @@ namespace FastbootStudio.Mobile.Native
                 list.Add(new JsonObject
                 {
                     ["name"] = e.Name, ["serial"] = e.Serial, ["model"] = e.Model, ["product"] = e.Product, ["date"] = e.Date,
-                    ["set"] = e.Set, ["kb"] = e.Kb, ["mine"] = id != null && e.IsFrom(id),
+                    ["set"] = e.Set, ["mode"] = e.Mode, ["kb"] = e.Kb, ["mine"] = id != null && e.IsFrom(id),
                     ["files"] = new JsonArray(e.Sums.Keys.OrderBy(k => k).Select(k => (JsonNode)new JsonObject
                     {
                         ["name"] = k, ["sha256"] = e.Sums[k], ["partition"] = BackupFolder.PartitionOf(k),
@@ -432,6 +441,15 @@ namespace FastbootStudio.Mobile.Native
             if (folder == null)
                 throw new BridgeError("backup-failed");
             return new JsonObject { ["name"] = Path.GetFileName(folder) };
+        }
+
+        JsonNode CompanionBackup(JsonObject a)
+        {
+            RequireRoot();
+            if (!Json.Bool(companion.Find(), "usable"))
+                throw new BridgeError("companion-missing");
+            string folder = companion.Backup(Json.Str(a, "set"), line => Event("progress", new JsonObject { ["line"] = line }));
+            return new JsonObject { ["name"] = folder };
         }
 
         JsonNode BackupVerify(JsonObject a)

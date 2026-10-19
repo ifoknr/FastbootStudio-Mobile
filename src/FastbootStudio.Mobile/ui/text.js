@@ -116,6 +116,14 @@ function errText(code) {
     'too-big-for-download': t('الملف أكبر من اللي يستقبله البوت لودر مرة وحدة', 'The file is bigger than the bootloader accepts at once'),
     'otg-failed': t('الجوال الموصول رفض', 'The connected phone refused'),
     'bad-link': t('رابط مو مسموح', 'Link not allowed'),
+    'bad-set': t('نوع النسخة مو معروف', 'Unknown backup set'),
+    'companion-missing': t('الإضافة مو مركّبة أو موقفة', 'The Companion module is missing or disabled'),
+    'companion-busy': t('الإضافة تاخذ نسخة ثانية الحين', 'The module is already taking a backup'),
+    'companion-space': t('المساحة ما تكفي للنسخة', 'Not enough free space for this backup'),
+    'companion-storage': t('ما قدرت الإضافة تكتب في الذاكرة', 'The module could not write to storage'),
+    'companion-nothing': t('ما فيه أقسام لهذي النسخة', 'No partitions for this backup set'),
+    'companion-no-by-name': t('الإضافة ما لقت مجلد الأقسام', 'The module found no by-name folder'),
+    'companion-failed': t('الإضافة ما كملت النسخة', 'The module did not finish the backup'),
   }[k];
   const detail = c.includes(':') ? c.slice(c.indexOf(':') + 1).trim() : '';
   return (m || t('خطأ', 'Error')) + (detail ? ` <small class="ltr">${esc(detail)}</small>` : (m ? '' : ` <small class="ltr">${esc(c)}</small>`));

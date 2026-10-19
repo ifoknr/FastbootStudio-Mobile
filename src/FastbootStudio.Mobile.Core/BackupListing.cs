@@ -14,6 +14,9 @@ namespace FastbootStudio.Mobile.Core
         public string Product { get; set; }
         public string Date { get; set; }
         public string Set { get; set; }
+
+        /// <summary>Who made it: "mobile" (this app), "companion" (the module), or the Windows app's mode.</summary>
+        public string Mode { get; set; }
         public long Kb { get; set; }
 
         /// <summary>File name to SHA-256, from SHA256SUMS.</summary>
@@ -83,6 +86,7 @@ namespace FastbootStudio.Mobile.Core
                     case "product": current.Product = value; break;
                     case "date": current.Date = value; break;
                     case "set": current.Set = value; break;
+                    case "mode": current.Mode = value; break;
                 }
             }
             Close();

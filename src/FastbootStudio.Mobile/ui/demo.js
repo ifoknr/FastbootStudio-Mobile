@@ -16,7 +16,7 @@
   };
   const files = (names) => names.map(n => ({ name: n + '.img', sha256: sha(n), partition: n }));
   const backups = [
-    { name: '23078PND5G_a1b2c3d4_20261015-221804', serial: 'a1b2c3d4', model: '23078PND5G', set: 'boot', kb: 122880, mine: true, files: files(['boot_a', 'dtbo_a', 'init_boot_a', 'vbmeta_a', 'vbmeta_system_a', 'vendor_boot_a']) },
+    { name: '23078PND5G_a1b2c3d4_20261015-221804', serial: 'a1b2c3d4', model: '23078PND5G', set: 'boot', mode: 'companion', kb: 122880, mine: true, files: files(['boot_a', 'dtbo_a', 'init_boot_a', 'vbmeta_a', 'vbmeta_system_a', 'vendor_boot_a']) },
     { name: '23078PND5G_a1b2c3d4_20261009-091233', serial: 'a1b2c3d4', model: '23078PND5G', set: 'before-flash', kb: 8192, mine: true, files: files(['init_boot_a']) },
     { name: '23078PND5G_a1b2c3d4_20260921-184012', serial: 'a1b2c3d4', model: '23078PND5G', set: 'boot', kb: 114688, mine: true, files: files(['boot_a', 'dtbo_a', 'init_boot_a', 'vbmeta_a', 'vendor_boot_a']) },
     { name: 'Redmi_Note_12_9f8e7d6c_20260830-120501', serial: '9f8e7d6c', model: 'Redmi Note 12', set: 'boot', kb: 98304, mine: false, files: files(['boot_a', 'vendor_boot_a']) },
@@ -106,6 +106,18 @@
       for (const l of lines) await new Promise(r => setTimeout(() => { window.fbsEvent('progress', { line: l }); r(); }, 250));
       return { installed: true, changed: true, backup: '23078PND5G_a1b2c3d4_20261018-102101' };
     },
+    'companion.find': () => root ? { installed: true, version: 'v2.5.1', enabled: true, usable: true } : { installed: false },
+    'companion.backup': async a => {
+      const parts = a.set === 'critical' ? ['abl_a', 'xbl_a', 'modem_a', 'modemst1', 'modemst2', 'persist', 'devinfo', 'frp'] : ['boot_a', 'init_boot_a', 'vendor_boot_a', 'dtbo_a', 'vbmeta_a'];
+      window.fbsEvent('progress', { line: 'plan ' + parts.length });
+      for (const p of parts) await new Promise(r => setTimeout(() => { window.fbsEvent('progress', { line: 'backup ' + p }); r(); }, 200));
+      if (q.get('hold') === 'comp') await new Promise(() => {});
+      const name = '23078PND5G_a1b2c3d4_20261019-090000';
+      backups.unshift({ name, serial: 'a1b2c3d4', model: '23078PND5G', set: a.set, mode: 'companion', kb: 40960, mine: true, files: files(parts) });
+      window.fbsEvent('progress', { line: 'backup ok /sdcard/FastbootStudio/Backups/' + name });
+      return { name };
+    },
+    'companion.bundle': () => ({ file: '/sdcard/FastbootStudio/Reports/companion-report_20261019-090500.tar.gz' }),
     'backup.list': () => root ? backups : [],
     'backup.create': async () => {
       for (const p of ['boot_a', 'init_boot_a', 'vendor_boot_a', 'dtbo_a', 'vbmeta_a', 'vbmeta_system_a']) await new Promise(r => setTimeout(() => { window.fbsEvent('progress', { line: 'backup ' + p }); r(); }, 250));

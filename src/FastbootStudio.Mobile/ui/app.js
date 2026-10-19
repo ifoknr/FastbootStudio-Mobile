@@ -61,6 +61,8 @@ const st = {
   tab: 'device', page: null,
   phone: null, phoneErr: null, refreshing: false,
   backups: null, bk: {}, bkOpen: null,
+  // The Companion module, looked for only with root: {installed, version, enabled, usable}.
+  comp: null,
   // This phone's flash page: src is {type:'backup', name, file} or {type:'file', token, name, size}.
   f: { src: null, base: null, other: false, expected: '', check: null, checking: false, err: null },
   // An AnyKernel3 zip picked on the flash page.
@@ -154,25 +156,38 @@ P.device = () => {
       <div class="banner warn">${svg('lock')}<div class="body"><div class="big">${t('التفليش على هذا الجوال يحتاج روت', 'Flashing this phone needs root')}</div>
       <div class="note">${t('ما لقينا صلاحية الروت. إذا عندك روت، وافق على طلب الصلاحية من مدير الروت وحدّث. وقائمة OTG تشتغل بدون روت عشان تنقذ جوال ثاني.', 'No root access was found. If the phone is rooted, allow the app in your root manager and refresh. The OTG menu works without root to rescue another phone.')}</div></div></div>
       <div class="card"><h2>${t('وش يشتغل', 'What works')}</h2>
-        <div class="check"><span class="dot ok"></span>${t('معلومات الجهاز', 'Device details')}</div>
-        <div class="check"><span class="dot ok"></span>${t('إنقاذ جوال ثاني بالـ OTG', 'Rescue another phone over OTG')}</div>
-        <div class="check"><span class="dot bad"></span>${t('التفليش والنسخ على هذا الجوال', 'Flashing and backups on this phone')}</div></div>
+        <div class="check"><span class="dot ok"></span><span>${t('معلومات الجهاز', 'Device details')}</span></div>
+        <div class="check"><span class="dot ok"></span><span>${t('إنقاذ جوال ثاني بالـ OTG', 'Rescue another phone over OTG')}</span></div>
+        <div class="check"><span class="dot bad"></span><span>${t('التفليش والنسخ على هذا الجوال', 'Flashing and backups on this phone')}</span></div></div>
       <button class="btn" data-act="refresh">${svg('refresh')}<span>${t('تحديث', 'Refresh')}</span></button></main>` + nav();
   return top + `<main>${device}
     <div class="card"><h2>${t('الكيرنل والحماية', 'Kernel and security')} ${p.avb ? chip(avbKind, 'AVB ' + esc(p.avb)) : ''}</h2>
     ${rows([[t('الكيرنل', 'Kernel'), esc(p.kernel)], p.kmi ? ['KMI', esc(p.kmi)] : null, [t('البوت لودر', 'Bootloader'), unlocked, A],
       p.selinux ? ['SELinux', esc(p.selinux)] : null, [t('الروت', 'Root'), esc(p.rootManager || t('متاح', 'Granted')), !p.rootManager && A]])}</div>
     <div class="card"><h2>${t('جاهزية التفليش', 'Ready to flash')}</h2>
-      <div class="check"><span class="dot ${p.unlocked === false ? 'bad' : p.unlocked ? 'ok' : 'info'}"></span>${p.unlocked === false ? t('البوت لودر مقفل: الصور المعدّلة ما تقلع', 'Bootloader locked: modified images will not boot') : p.unlocked ? t('البوت لودر مفتوح: الصور المعدّلة تقلع', 'Bootloader unlocked: modified images boot') : t('ما قدرنا نعرف حالة البوت لودر', 'The bootloader state is unknown')}</div>
-      <div class="check"><span class="dot ok"></span>${t('صلاحية الروت متاحة للتطبيق', 'Root access granted to the app')}</div>
+      <div class="check"><span class="dot ${p.unlocked === false ? 'bad' : p.unlocked ? 'ok' : 'info'}"></span><span>${p.unlocked === false ? t('البوت لودر مقفل: الصور المعدّلة ما تقلع', 'Bootloader locked: modified images will not boot') : p.unlocked ? t('البوت لودر مفتوح: الصور المعدّلة تقلع', 'Bootloader unlocked: modified images boot') : t('ما قدرنا نعرف حالة البوت لودر', 'The bootloader state is unknown')}</span></div>
+      <div class="check"><span class="dot ok"></span><span>${t('صلاحية الروت متاحة للتطبيق', 'Root access granted to the app')}</span></div>
       <div class="check"><span class="dot ${battOk ? 'ok' : 'bad'}"></span>${p.battery < 0 ? t('ما قدرنا نقرا البطارية', 'Battery level unknown') : battOk
         ? t(`البطارية ${L(p.battery + '%')}: فوق الحد الأدنى ${L(st.s.minBattery + '%')}`, `Battery ${p.battery}%: above the ${st.s.minBattery}% minimum`)
         : t(`البطارية ${L(p.battery + '%')}: أقل من ${L(st.s.minBattery + '%')}، اشحن قبل التفليش`, `Battery ${p.battery}%: below ${st.s.minBattery}%, charge before flashing`)}</div>
-      ${st.backups ? `<div class="check"><span class="dot ${today ? 'ok' : 'warn'}"></span>${today ? t('فيه نسخة احتياطية من اليوم', 'There is a backup from today') : t('ما فيه نسخة احتياطية من اليوم', 'No backup from today')}</div>` : ''}
+      ${st.backups ? `<div class="check"><span class="dot ${today ? 'ok' : 'warn'}"></span><span>${today ? t('فيه نسخة احتياطية من اليوم', 'There is a backup from today') : t('ما فيه نسخة احتياطية من اليوم', 'No backup from today')}</span></div>` : ''}
     </div>
+    ${companionCard()}
     <button class="btn" data-act="refresh" ${st.refreshing ? 'disabled' : ''}>${svg('refresh')}<span>${t('تحديث', 'Refresh')}</span></button>
   </main>` + nav();
 };
+
+// Shown only when the module is installed (and so only with root).
+function companionCard() {
+  const c = st.comp;
+  if (!c || !c.installed) return '';
+  if (!c.usable)
+    return `<div class="card"><h2>Fastboot Studio Companion ${chip('warn', t('موقفة', 'Disabled'))}</h2>
+      <div class="note">${t('الإضافة مركّبة بس موقفة. فعّلها من برنامج الروت وأعد التشغيل، وبعدها تقدر تستخدمها من هنا.', 'The module is installed but disabled. Turn it on in your root manager and restart to use it from here.')}</div></div>`;
+  return `<div class="card"><h2>Fastboot Studio Companion ${chip('ok', '✓ ' + esc(c.version || ''))}</h2>
+    <div class="note">${t('الإضافة متصلة بالتطبيق: نسخها تطلع في صفحة النسخ، وتتحقق منها وتفلّشها من التطبيق. وتقدر تاخذ منها نسخة حرجة (البوت لودر والمودم و persist) ما ياخذها التطبيق لحاله.', 'The module works with the app: its backups show on the Backups page, where you check and flash them. It also takes a critical backup (bootloader chain, modem, persist) the app does not take by itself.')}</div>
+    <div class="row2" style="margin-top:10px"><button class="btn sm" data-act="compBackup" data-v="critical"><span>${t('نسخة حرجة', 'Critical backup')}</span></button><button class="btn sm" data-act="compBundle"><span>${t('تقرير للدعم', 'Support report')}</span></button></div></div>`;
+}
 
 const noRoot = () => `<div class="banner warn">${svg('lock')}<div class="body"><div class="big">${t('يحتاج روت', 'Needs root')}</div><div class="note">${t('التفليش والنسخ على هذا الجوال يحتاج صلاحية الروت. للجوال الثاني استخدم قائمة OTG.', 'Flashing and backups on this phone need root. For another phone use the OTG menu.')}</div></div></div>`;
 
@@ -195,7 +210,7 @@ P.flash = () => {
   const flashable = f.check && f.check.check.canFlash;
   return top + `<main>
     <div><div class="label">${t('١. الملف', '1. The file')}</div>${src}
-      <div class="row2" style="margin-top:${src ? 8 : 0}px"><button class="btn sm" data-act="pickBackup">${t('من النسخ', 'From backups')}</button><button class="btn sm" data-act="pickFile">${t('ملف IMG أو ZIP', 'IMG or ZIP file')}</button></div></div>
+      <div class="row2" style="margin-top:${src ? 8 : 0}px"><button class="btn sm" data-act="pickBackup"><span>${t('من النسخ', 'From backups')}</span></button><button class="btn sm" data-act="pickFile"><span>${t('ملف IMG أو ZIP', 'IMG or ZIP file')}</span></button></div></div>
     <div><div class="label">${t('٢. القسم', '2. Partition')}</div>
       <div class="parts">${ALLOWED.map(b => `<button class="${f.base === b ? 'on' : ''}" data-act="base" data-v="${b}" ${targets.includes(b) ? '' : 'disabled'}>${b}</button>`).join('')}</div></div>
     ${p.ab ? `<div><div class="label">${t('٣. السلوت', '3. Slot')}</div>
@@ -220,7 +235,7 @@ P.kernel = () => {
     <div><div class="label">${t('بصمة المطور SHA-256 (اختياري)', 'Developer’s SHA-256 (optional)')}</div><input class="input" data-in="kexp" value="${esc(k.expected)}" placeholder="${t('الصق البصمة اللي نشرها المطور', 'Paste the hash the developer published')}" spellcheck="false" autocomplete="off"></div>
     ${k.checking ? spinner(t('يفحص الملف…', 'Checking the zip…')) : k.err ? errBanner(k.err) : c ? checkBanner(c.check, 'kernel') : ''}
     ${c && !c.check.canFlash ? whyButton('kernel') : ''}<button class="btn primary" data-act="flashKernel" ${c && c.check.canFlash ? '' : 'disabled'}><span>${t('فلّش الكيرنل', 'Flash the kernel')}</span></button>
-    <button class="btn sm" data-act="kernelClose">${t('رجوع لتفليش الصور', 'Back to flashing images')}</button>
+    <button class="btn sm" data-act="kernelClose"><span>${t('رجوع لتفليش الصور', 'Back to flashing images')}</span></button>
     <div class="note">${t('التطبيق ياخذ نسخة من boot و init_boot و vendor_boot و dtbo قبل التثبيت (إذا مفعّلة في الإعدادات).', 'The app backs up boot, init_boot, vendor_boot and dtbo before installing (when enabled in Settings).')}</div>
   </main>` + nav();
 };
@@ -243,7 +258,11 @@ P.running = () => {
     steps.push([t(`إرسال ${LE(r.partition)}`, `Send ${esc(r.partition)}`), r.total ? L(`${esc(mib(r.sent))} / ${esc(mib(r.total))}`) : '', r.total > 0 && r.sent >= r.total]);
     steps.push([t('الكتابة (من البوت لودر)', 'Write (by the bootloader)'), '', r.state === 'done']);
   } else if (r.kind === 'backup') {
-    steps.push([t('نسخ الأقسام', 'Copy the partitions'), LE(r.lines.filter(l => l.startsWith('backup ') && !l.startsWith('backup ok')).map(l => l.slice(7)).join(', ')), has('backup ok')]);
+    const copied = r.lines.filter(l => l.startsWith('backup ') && !l.startsWith('backup ok')).map(l => l.slice(7));
+    const plan = r.lines.find(l => l.startsWith('plan '));
+    const failedParts = r.lines.filter(l => l.startsWith('failed ')).map(l => l.slice(7));
+    steps.push([t('نسخ الأقسام', 'Copy the partitions') + (plan ? ' ' + L(`${copied.length} / ${esc(plan.slice(5))}`) : ''),
+      LE(copied.slice(-6).join(', ')) + (failedParts.length ? `<br><span style="color:var(--warn)">${t('ما انقرت:', 'Could not copy:')} ${LE(failedParts.join(', '))}</span>` : ''), has('backup ok')]);
   }
   if (r.state !== 'running') steps = steps.map(s => [s[0], s[1], s[2] || r.state === 'done']);
   steps.push([t('تم', 'Done'), '', r.state === 'done']);
@@ -276,29 +295,29 @@ P.running = () => {
 function doneBody(r) {
   if (r.kind === 'backup')
     return `<div class="card"><div class="big-ok"><div class="c">✓</div><h3>${t('انحفظت النسخة', 'Backup saved')}</h3><div class="note">${t('كل صورة ومعها بصمتها في SHA256SUMS.', 'Every image with its SHA-256 in SHA256SUMS.')}</div></div>
-      ${rows([[t('المجلد', 'Folder'), esc(r.name || '')]])}</div><button class="btn primary" data-act="runClose">${t('تم', 'Done')}</button>`;
+      ${rows([[t('المجلد', 'Folder'), esc(r.name || '')]])}</div><button class="btn primary" data-act="runClose"><span>${t('تم', 'Done')}</span></button>`;
   if (r.kind === 'otg')
     return `<div class="card"><div class="big-ok"><div class="c">✓</div><h3>${t(`انكتب ${LE(r.partition)} على الجوال الموصول`, `${esc(r.partition)} written to the connected phone`)}</h3>
       <div class="note">${t('البوت لودر رد بـ OKAY. وضع fastboot ما يسمح بقراءة القسم، فالتحقق كان من الملف قبل الإرسال.', 'The bootloader answered OKAY. Fastboot cannot read a partition back, so the file was verified before sending.')}</div></div>
       ${rows([[t('القسم', 'Partition'), esc(r.partition)], ['SHA-256', esc(short(r.sha256)) + ' ✓'], [t('الجوال', 'Phone'), esc(r.serial || '')]])}</div>
-      <div class="row2"><button class="btn primary" data-act="otgReboot" data-v="">${t('تشغيل الجوال', 'Start the phone')}</button><button class="btn" data-act="runClose">${t('تفليش ثاني', 'Flash another')}</button></div>`;
+      <div class="row2"><button class="btn primary" data-act="otgReboot" data-v=""><span>${t('تشغيل الجوال', 'Start the phone')}</span></button><button class="btn" data-act="runClose"><span>${t('تفليش ثاني', 'Flash another')}</span></button></div>`;
   if (r.kind === 'kernel') {
     const changed = r.outcome && r.outcome.changed;
     return `<div class="card"><div class="big-ok"><div class="c${changed ? '' : ' warn'}">${changed ? '✓' : '!'}</div><h3>${changed ? t('انثبّت الكيرنل', 'The kernel is installed') : t('AnyKernel3 خلص، بس القسم ما تغيّر', 'AnyKernel3 finished, but the partition did not change')}</h3>
       <div class="note">${changed ? t('القسم تغيّر بعد التثبيت. شغّل الجوال من جديد عشان يشتغل الكيرنل.', 'The partition changed. Restart the phone to run the new kernel.') : t('شوف مخرجات AnyKernel3 تحت: ممكن رفض الملف.', 'See the AnyKernel3 output below: it may have refused the zip.')}</div></div>
       ${r.backup ? rows([[t('النسخة القديمة', 'Previous copy'), esc('Backups/…' + r.backup.slice(-16))]]) : ''}</div>
-      <button class="btn primary" data-act="reboot" data-v="">${t('إعادة التشغيل الحين', 'Restart now')}</button>
+      <button class="btn primary" data-act="reboot" data-v=""><span>${t('إعادة التشغيل الحين', 'Restart now')}</span></button>
       ${r.backup ? `<button class="btn" data-act="restoreFrom" data-v="${esc(r.backup)}">${svg('restore')}<span>${t('رجّع النسخة القديمة', 'Put the previous copy back')}</span></button>` : ''}
-      <button class="btn sm" data-act="runClose">${t('رجوع', 'Back')}</button>`;
+      <button class="btn sm" data-act="runClose"><span>${t('رجوع', 'Back')}</span></button>`;
   }
   const verified = r.outcome && r.outcome.verified;
   return `<div class="card"><div class="big-ok"><div class="c">✓</div><h3>${verified ? t(`انكتب ${LE(r.partition)} وتطابق`, `${esc(r.partition)} written and verified`) : t(`انكتب ${LE(r.partition)}`, `${esc(r.partition)} written`)}</h3>
     <div class="note">${verified ? t('قرينا القسم بعد الكتابة وبصمته نفس بصمة الملف.', 'The partition was read back and its SHA-256 equals the file’s.') : t('القراءة بعد الكتابة مقفلة في الإعدادات.', 'Reading back is off in Settings.')}</div></div>
     ${rows([[t('القسم', 'Partition'), esc(r.partition)], ['SHA-256', esc(short(r.sha256)) + (verified ? ' ✓' : '')], r.backup ? [t('النسخة القديمة', 'Previous copy'), esc('Backups/…' + r.backup.slice(-16))] : null])}</div>
-    <button class="btn primary" data-act="reboot" data-v="">${t('إعادة التشغيل الحين', 'Restart now')}</button>
+    <button class="btn primary" data-act="reboot" data-v=""><span>${t('إعادة التشغيل الحين', 'Restart now')}</span></button>
     ${r.backup ? `<button class="btn" data-act="restoreFrom" data-v="${esc(r.backup)}" data-file="${esc(r.partition)}.img">${svg('restore')}<span>${t('رجّع النسخة القديمة', 'Put the previous copy back')}</span></button>` : ''}
     <div class="note">${t('إذا الجوال ما قلع: رجّع النسخة القديمة من برنامج الويندوز، أو من جوال ثاني بقائمة OTG.', 'If the phone does not start: put the previous copy back from the Windows app, or from another phone with the OTG menu.')}</div>
-    <button class="btn sm" data-act="runClose">${t('رجوع', 'Back')}</button>`;
+    <button class="btn sm" data-act="runClose"><span>${t('رجوع', 'Back')}</span></button>`;
 }
 
 function failBody(r, stepHtml) {
@@ -310,7 +329,7 @@ function failBody(r, stepHtml) {
   return `<div class="banner bad">${svg('warn')}<div class="body"><div class="big">${errText(r.error)}</div><div class="note">${note}</div></div></div>
     <div class="card"><div class="steps">${stepHtml}</div></div>
     ${written && r.backup ? `<button class="btn primary" data-act="restoreFrom" data-v="${esc(r.backup)}" data-file="${esc(r.partition)}.img">${svg('restore')}<span>${t('رجّع النسخة القديمة', 'Put the previous copy back')}</span></button>` : ''}
-    <button class="btn" data-act="runClose">${t('رجوع', 'Back')}</button>`;
+    <button class="btn" data-act="runClose"><span>${t('رجوع', 'Back')}</span></button>`;
 }
 
 P.backup = () => {
@@ -327,7 +346,7 @@ P.backup = () => {
     const side = !b.mine ? chip('warn', t('جوال ثاني', 'Other phone'))
       : s === 'run' ? '<span class="spin"></span>' : s === 'ok' ? chip('ok', '✓ ' + t('مطابقة', 'Verified'))
       : s && s.failed ? chip('bad', '✗ ' + (A ? `${s.failed.length} ${s.failed.length === 1 ? 'ملف متغيّر' : 'ملفات متغيّرة'}` : `${s.failed.length} changed`)) : chip('', t('ما تحققت', 'Not checked'));
-    const meta = b.mine ? `${imagesCount(b.files.length)} · ${LE(mib(b.kb * 1024))} · ${setLabel(b.set)}` : t(`${esc(b.model || '?')} · ما تنفلش هنا`, `${esc(b.model || '?')} · not flashable here`);
+    const meta = b.mine ? `${imagesCount(b.files.length)} · ${LE(mib(b.kb * 1024))} · ${setLabel(b.set)}${b.mode === 'companion' ? ' · ' + t('من الإضافة', 'Companion') : ''}` : t(`${esc(b.model || '?')} · ما تنفلش هنا`, `${esc(b.model || '?')} · not flashable here`);
     return `<button class="bk${st.bkOpen === b.name ? ' open' : ''}" data-act="bkOpen" data-v="${esc(b.name)}"><div class="n">${esc(b.name)}</div><div class="s">${side}</div><div class="m">${meta}</div></button>`;
   }).join('')}</div>`;
   const open = list && list.find(b => b.name === st.bkOpen);
@@ -338,10 +357,10 @@ P.backup = () => {
     detail = `<div class="card"><h2>${t('محتوى النسخة', 'Inside the backup')} ${chip('', esc(backupDate(open.name)))}</h2>
       ${rows(open.files.map(f => [LE(f.name.replace(/\.img$/, '')), esc(short(f.sha256)) + (failed.includes(f.name) ? ' ✗' : s === 'ok' ? ' ✓' : '')]))}
       ${open.mine ? '' : `<div class="note" style="margin-top:8px">${t(`النسخة لـ ${esc(open.model || '?')} · ${esc(open.serial || '?')}: تنفلش على جوالها بس (من OTG أو الكمبيوتر).`, `This backup is ${esc(open.model || '?')} · ${esc(open.serial || '?')}’s: it can only go back to that phone (OTG or a computer).`)}</div>`}
-      <div class="${open.mine ? 'row3' : 'row2'}" style="margin-top:10px">${open.mine ? `<button class="btn sm" data-act="bkVerify" data-v="${esc(open.name)}">${t('تحقق', 'Verify')}</button><button class="btn sm" data-act="bkRestore" data-v="${esc(open.name)}">${t('استرجاع', 'Restore')}</button>` : ''}<button class="btn sm danger" data-act="bkDelete" data-v="${esc(open.name)}">${t('حذف', 'Delete')}</button></div></div>`;
+      <div class="${open.mine ? 'row3' : 'row2'}" style="margin-top:10px">${open.mine ? `<button class="btn sm" data-act="bkVerify" data-v="${esc(open.name)}"><span>${t('تحقق', 'Verify')}</span></button><button class="btn sm" data-act="bkRestore" data-v="${esc(open.name)}"><span>${t('استرجاع', 'Restore')}</span></button>` : ''}<button class="btn sm danger" data-act="bkDelete" data-v="${esc(open.name)}"><span>${t('حذف', 'Delete')}</span></button></div></div>`;
   }
   return top + `<main>
-    <div class="row2"><button class="btn primary" data-act="bkNew">${t('نسخة جديدة', 'New backup')}</button><button class="btn" data-act="bkVerifyAll" ${list && list.some(b => b.mine) ? '' : 'disabled'}>${t('تحقق من الكل', 'Verify all')}</button></div>
+    <div class="row2"><button class="btn primary" data-act="bkNew"><span>${t('نسخة جديدة', 'New backup')}</span></button><button class="btn" data-act="bkVerifyAll" ${list && list.some(b => b.mine) ? '' : 'disabled'}><span>${t('تحقق من الكل', 'Verify all')}</span></button></div>
     ${items}${detail}
   </main>` + nav();
 };
@@ -379,7 +398,7 @@ P.otg = () => {
     ${p.unlocked === 'no' ? `<div class="banner warn">${svg('lock')}<div class="body note">${t('البوت لودر مقفل: غالباً بيرفض التفليش.', 'The bootloader is locked: it will most likely refuse to flash.')}</div></div>` : ''}
     ${o.err ? errBanner(o.err) : ''}
     <div><div class="label">${t('١. الملف', '1. The file')}</div>${src}
-      <div class="row2" style="margin-top:${src ? 8 : 0}px"><button class="btn sm" data-act="otgFolder">${t('من مجلد نسخة', 'From a backup folder')}</button><button class="btn sm" data-act="otgPickFile">${t('ملف IMG', 'IMG file')}</button></div></div>
+      <div class="row2" style="margin-top:${src ? 8 : 0}px"><button class="btn sm" data-act="otgFolder"><span>${t('من مجلد نسخة', 'From a backup folder')}</span></button><button class="btn sm" data-act="otgPickFile"><span>${t('ملف IMG', 'IMG file')}</span></button></div></div>
     ${folderFiles}
     <div><div class="label">${t('٢. القسم', '2. Partition')}</div>
       <div class="parts">${ALLOWED.map(b => `<button class="${o.base === b ? 'on' : ''}" data-act="otgBase" data-v="${b}" ${(p.targets || []).includes(b) ? '' : 'disabled'}>${b}</button>`).join('')}</div></div>
@@ -388,7 +407,7 @@ P.otg = () => {
     ${o.checking ? spinner(t('يتحقق من الملف…', 'Checking the file…')) : o.check ? checkBanner(o.check.check, 'otg') + (o.check.tooBigForDownload ? errBanner('too-big-for-download') : '') : ''}
     ${o.check && !o.check.check.canFlash ? whyButton('otg') : ''}<button class="btn primary" data-act="otgFlash" ${flashable ? '' : 'disabled'}><span>${o.base ? t(`أرسل وفلّش ${LE(o.base)}${slot ? ' على ' + LE(slot) : ''}`, `Send and flash ${esc(o.base)}${slot ? ' to ' + esc(slot) : ''}`) : t('أرسل وفلّش', 'Send and flash')}</span></button>
     <div class="label">${t('تشغيل الجوال الموصول', 'Restart the connected phone')}</div>
-    <div class="row3"><button class="btn sm" data-act="otgReboot" data-v="">${t('النظام', 'System')}</button><button class="btn sm" data-act="otgReboot" data-v="bootloader">bootloader</button><button class="btn sm" data-act="otgReboot" data-v="recovery">recovery</button></div>
+    <div class="row3"><button class="btn sm" data-act="otgReboot" data-v=""><span>${t('النظام', 'System')}</span></button><button class="btn sm" data-act="otgReboot" data-v="bootloader"><span>bootloader</span></button><button class="btn sm" data-act="otgReboot" data-v="recovery"><span>recovery</span></button></div>
     <div class="note">${t('يكتب على هذا الجوال الموصول برقمه بس، وما يلمس أي جهاز ثاني.', 'Writes to this connected phone by its serial only, never to another device.')}</div>
   </main>` + nav();
 };
@@ -456,7 +475,7 @@ S.confirm = sh => {
       <div class="card" style="padding:10px 14px">${checkRows(c, ctx, true)}</div>
       <div class="note" style="color:var(--text)">${hard ? t('هذا الرفض ما يتغيّر حتى في وضع المطور، لأن الملف تالف أو خطير أو لجوال ثاني أو لقسم ثاني.', 'This cannot be overridden, not even in developer mode: the file is damaged, harmful, another phone’s or another partition’s.')
         : over ? t('الملف مكتوب لجهاز أو أندرويد ثاني. وضع المطور في الإعدادات يسمح فيه على مسؤوليتك.', 'The file is made for another device or Android version. Developer mode in Settings allows it at your own risk.') : ''}</div>
-      <button class="btn primary" data-act="sheetClose">${t('رجوع واختيار ملف ثاني', 'Back, pick another file')}</button>`);
+      <button class="btn primary" data-act="sheetClose"><span>${t('رجوع واختيار ملف ثاني', 'Back, pick another file')}</span></button>`);
   }
   if (c.verdict === 'warn') {
     const dev = c.items.some(i => i.override && i.level === 'warn');
@@ -465,48 +484,53 @@ S.confirm = sh => {
       <div class="card" style="padding:10px 14px">${checkRows(c, ctx)}</div>
       <div class="note">${t(`للمتابعة اكتب اسم القسم ${LE(typed)}:`, `To go ahead, type the partition name ${esc(typed)}:`)}</div>
       <input class="typed" data-in="typed" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${esc(typed)}">
-      <div class="row2"><button class="btn" data-act="sheetClose">${t('إلغاء', 'Cancel')}</button><button class="btn warnb" id="typedGo" data-act="${go}" disabled>${dev ? t('فلّش على مسؤوليتي', 'Flash at my own risk') : t('فلّش', 'Flash')}</button></div>`);
+      <div class="row2"><button class="btn" data-act="sheetClose"><span>${t('إلغاء', 'Cancel')}</span></button><button class="btn warnb" id="typedGo" data-act="${go}" disabled><span>${dev ? t('فلّش على مسؤوليتي', 'Flash at my own risk') : t('فلّش', 'Flash')}</span></button></div>`);
   }
   return sheet('notice', `<div class="banner info">${svg('info')}<div class="body"><div class="big">${t('تنبيه خفيف', 'Worth knowing')}</div><div class="note">${t('الملف سليم، بس فيه شي مختلف عن اللي شغّال الحين. أنت تختار.', 'The file is fine, but something differs from what runs now. Your call.')}</div></div></div>
     <div class="card" style="padding:10px 14px">${checkRows(c, ctx)}</div>
-    <div class="row2"><button class="btn" data-act="sheetClose">${t('إلغاء', 'Cancel')}</button><button class="btn primary" data-act="${go}" data-notice="1">${t('أكمل', 'Continue')}</button></div>`);
+    <div class="row2"><button class="btn" data-act="sheetClose"><span>${t('إلغاء', 'Cancel')}</span></button><button class="btn primary" data-act="${go}" data-notice="1"><span>${t('أكمل', 'Continue')}</span></button></div>`);
 };
 
 S.pickBackup = () => {
   const mine = (st.backups || []).filter(b => b.mine);
   const body = !st.backups ? spinner(t('يقرا النسخ…', 'Reading the backups…')) : !mine.length
     ? `<div class="note">${t('ما فيه نسخ لهذا الجوال.', 'No backups of this phone.')}</div>`
-    : mine.map(b => `<div class="label">${esc(backupDate(b.name))} · ${setLabel(b.set)}</div><div class="files">${b.files.filter(f => f.partition && ALLOWED.includes(baseOf(f.partition))).map(f =>
+    : mine.filter(b => flashableFiles(b).length).map(b => `<div class="label">${esc(backupDate(b.name))} · ${setLabel(b.set)}</div><div class="files">${flashableFiles(b).map(f =>
         `<button class="file" data-act="useBackup" data-v="${esc(b.name)}" data-file="${esc(f.name)}"><div class="ico">${svg('file')}</div><div style="flex:1;min-width:0"><div class="n">${esc(f.name)}</div><div class="m ltr">${esc(short(f.sha256))}</div></div></button>`).join('')}</div>`).join('');
-  return sheet('line', `<h3>${t('اختر صورة من نسخة', 'Pick an image from a backup')}</h3>${body}<button class="btn" data-act="sheetClose">${t('إلغاء', 'Cancel')}</button>`);
+  return sheet('line', `<h3>${t('اختر صورة من نسخة', 'Pick an image from a backup')}</h3>${body}<button class="btn" data-act="sheetClose"><span>${t('إلغاء', 'Cancel')}</span></button>`);
 };
 
 S.restore = sh => {
   const b = (st.backups || []).find(x => x.name === sh.name);
   if (!b) return '';
   return sheet('line', `<h3>${t('استرجاع من النسخة', 'Restore from the backup')}</h3><div class="note">${t('اختر الصورة. التطبيق يتحقق منها ثم تفلّشها من صفحة التفليش.', 'Pick the image. The app checks it, then you flash it from the Flash page.')}</div>
-    <div class="files">${b.files.filter(f => f.partition && ALLOWED.includes(baseOf(f.partition))).map(f => `<button class="file" data-act="useBackup" data-v="${esc(b.name)}" data-file="${esc(f.name)}"><div class="ico">${svg('restore')}</div><div style="flex:1;min-width:0"><div class="n">${esc(f.name)}</div><div class="m ltr">${esc(short(f.sha256))}</div></div></button>`).join('')}</div>
-    <button class="btn" data-act="sheetClose">${t('إلغاء', 'Cancel')}</button>`);
+    <div class="files">${flashableFiles(b).map(f => `<button class="file" data-act="useBackup" data-v="${esc(b.name)}" data-file="${esc(f.name)}"><div class="ico">${svg('restore')}</div><div style="flex:1;min-width:0"><div class="n">${esc(f.name)}</div><div class="m ltr">${esc(short(f.sha256))}</div></div></button>`).join('')}</div>
+    ${flashableFiles(b).length < b.files.length ? `<div class="note">${t('باقي صور النسخة (البوت لودر والمودم وغيرها) ما تنكتب من الجوال: ترجع من برنامج الويندوز بوضع fastboot.', 'The backup’s other images (bootloader chain, modem...) are not written from the phone: they go back from the Windows app, in fastboot.')}</div>` : ''}
+    <button class="btn" data-act="sheetClose"><span>${t('إلغاء', 'Cancel')}</span></button>`);
 };
 
 S.newBackup = () => {
   const p = st.phone || {};
   return sheet('accent', `<h3>${t('نسخة جديدة', 'New backup')}</h3><div class="note">${t(`ينسخ أقسام الإقلاع (${L((p.targets || []).join(', '))}) إلى ${LE(st.backupRoot)}`, `Copies the boot partitions (${esc((p.targets || []).join(', '))}) to ${esc(st.backupRoot)}`)}</div>
-    <button class="btn primary" data-act="doBackup" data-v="0">${p.ab ? t(`السلوت الحالي ${LE(p.slot)}`, `The current slot ${esc(p.slot)}`) : t('ابدأ', 'Start')}</button>
-    ${p.ab ? `<button class="btn" data-act="doBackup" data-v="1">${t('السلوتين a و b', 'Both slots, a and b')}</button>` : ''}
-    <button class="btn sm" data-act="sheetClose">${t('إلغاء', 'Cancel')}</button>`);
+    <button class="btn primary" data-act="doBackup" data-v="0"><span>${p.ab ? t(`السلوت الحالي ${LE(p.slot)}`, `The current slot ${esc(p.slot)}`) : t('ابدأ', 'Start')}</span></button>
+    ${p.ab ? `<button class="btn" data-act="doBackup" data-v="1"><span>${t('السلوتين a و b', 'Both slots, a and b')}</span></button>` : ''}
+    ${st.comp && st.comp.usable ? `<div class="label" style="margin-top:4px">${t('من الإضافة (Companion)', 'With the Companion module')}</div>
+    <button class="btn" data-act="compBackup" data-v="critical"><span>${t('حرجة: البوت لودر والمودم و persist', 'Critical: bootloader chain, modem, persist')}</span></button>
+    <button class="btn" data-act="compBackup" data-v="full"><span>${t('كاملة: كل شي إلا userdata', 'Full: everything but userdata')}</span></button>
+    <div class="note">${t('النسخة الكاملة فيها super، فتاخذ عدة جيجا. الإضافة تتأكد من المساحة قبل ما تبدأ.', 'The full backup includes super, so it takes several GB; the module checks the free space first.')}</div>` : ''}
+    <button class="btn sm" data-act="sheetClose"><span>${t('إلغاء', 'Cancel')}</span></button>`);
 };
 
 S.deleteBackup = sh => sheet('danger', `<h3>${t('حذف النسخة؟', 'Delete the backup?')}</h3><div class="note ltr">${esc(sh.name)}</div>
   <div class="note" style="color:var(--text)">${t('الحذف نهائي. إذا هذي آخر نسخة لجوالك، خذ نسخة جديدة قبل أي تفليش.', 'This cannot be undone. If it is your phone’s last backup, take a new one before flashing.')}</div>
-  <div class="row2"><button class="btn" data-act="sheetClose">${t('إلغاء', 'Cancel')}</button><button class="btn danger" data-act="doDelete" data-v="${esc(sh.name)}">${t('حذف', 'Delete')}</button></div>`);
+  <div class="row2"><button class="btn" data-act="sheetClose"><span>${t('إلغاء', 'Cancel')}</span></button><button class="btn danger" data-act="doDelete" data-v="${esc(sh.name)}"><span>${t('حذف', 'Delete')}</span></button></div>`);
 
 S.dev = () => sheet('warn', `<div class="banner warn">${svg('warn')}<div class="body"><div class="big">${t('تشغيل وضع المطور؟', 'Turn on developer mode?')}</div>
   <div class="note">${t('يسمح بملفات مكتوبة لجهاز ثاني أو أندرويد ثاني بعد ما تكتب اسم القسم. ممكن الجوال ما يقلع، والنسخة الاحتياطية ترجّعه.', 'Files made for another device or Android version are allowed once you type the partition name. The phone may not start; the backup puts it back.')}</div></div></div>
   <div class="note" style="color:var(--danger)">${t('الملفات الخبيثة أو التالفة أو نسخ جوال ثاني تبقى ممنوعة.', 'Harmful or damaged files, and other phones’ backups, stay refused.')}</div>
-  <div class="row2"><button class="btn" data-act="sheetClose">${t('إلغاء', 'Cancel')}</button><button class="btn warnb" data-act="devOn">${t('شغّل', 'Turn on')}</button></div>`);
+  <div class="row2"><button class="btn" data-act="sheetClose"><span>${t('إلغاء', 'Cancel')}</span></button><button class="btn warnb" data-act="devOn"><span>${t('شغّل', 'Turn on')}</span></button></div>`);
 
-S.message = sh => sheet(sh.color || 'line', `<div class="banner ${sh.kind || 'bad'}">${svg('warn')}<div class="body"><div class="big" style="font-size:14px">${sh.html}</div></div></div><button class="btn" data-act="sheetClose">${t('تمام', 'OK')}</button>`);
+S.message = sh => sheet(sh.color || 'line', `<div class="banner ${sh.kind || 'bad'}">${svg('warn')}<div class="body"><div class="big" style="font-size:14px">${sh.html}</div></div></div><button class="btn" data-act="sheetClose"><span>${t('تمام', 'OK')}</span></button>`);
 
 // ---------------------------------------------------------------- render
 
@@ -563,8 +587,17 @@ async function refresh() {
   catch (e) { st.phoneErr = e.message; }
   st.refreshing = false;
   render();
-  if (st.phone && st.phone.root) loadBackups();
+  if (st.phone && st.phone.root) { loadBackups(); loadCompanion(); }
+  else st.comp = null;
 }
+
+async function loadCompanion() {
+  try { st.comp = await call('companion.find'); } catch (e) { st.comp = null; }
+  render();
+}
+
+// Backups of the partitions the app may write: a critical backup of the Companion has none.
+const flashableFiles = b => b.files.filter(f => f.partition && ALLOWED.includes(baseOf(f.partition)));
 
 async function loadBackups() {
   try { st.backups = await call('backup.list'); } catch (e) { st.backups = []; fail(e); }
@@ -734,6 +767,15 @@ const actions = {
   reboot: el => call('reboot', { target: el.dataset.v || null }).catch(fail),
 
   bkOpen: el => { st.bkOpen = st.bkOpen === el.dataset.v ? null : el.dataset.v; render(); },
+  compBackup: el => {
+    st.tab = 'backup'; st.page = null;
+    startRun({ kind: 'backup', where: 'backup' }, 'companion.backup', { set: el.dataset.v }, () => loadBackups());
+  },
+  compBundle: async () => {
+    toast(t('يجهّز التقرير…', 'Making the report…'));
+    try { const r = await call('companion.bundle'); toast(t(`انحفظ التقرير (الرقم و IMEI مخفية): ${LE(r.file)}`, `Report saved (serial and IMEI masked): ${esc(r.file)}`)); }
+    catch (e) { fail(e); }
+  },
   bkNew: () => { st.sheet = { type: 'newBackup' }; render(); },
   doBackup: el => startRun({ kind: 'backup', where: 'backup' }, 'backup.create', { both: el.dataset.v === '1' }, () => loadBackups()),
   bkVerify: async el => {
