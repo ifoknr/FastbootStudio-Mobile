@@ -29,6 +29,10 @@ namespace FastbootStudio.Mobile.Core
         public string Block { get; private set; }
 
         public string Sha256 { get; private set; }
+
+        /// <summary>The kernel inside ("5.10.107", "android13-5.10"), from the kernel image or, failing that, the zip's name.</summary>
+        public KernelCompare.Kernel Kernel { get; private set; }
+
         public CheckResult Result { get; } = new CheckResult();
 
         static readonly Regex Property = new Regex(@"^\s*([a-z][a-z0-9_.]*)\s*=\s*(.*?)\s*;?\s*$", RegexOptions.IgnoreCase);
@@ -69,6 +73,7 @@ namespace FastbootStudio.Mobile.Core
                         script = reader.ReadToEnd();
                     if (!ScanScripts(archive, result))
                         return zip;
+                    zip.Kernel = ReadKernel(archive);
                 }
             }
             catch (InvalidDataException)
@@ -85,9 +90,28 @@ namespace FastbootStudio.Mobile.Core
             }
             zip.CheckDevice(phone);
             zip.CheckAndroid(phone);
+            // The kernel image says which kernel it is; when it cannot be read, the zip's name or kernel.string often do.
+            zip.Kernel ??= KernelCompare.FromText(Path.GetFileName(zipPath)) ?? KernelCompare.FromText(zip.KernelString);
+            KernelCompare.Add(result, zip.Kernel, phone?.KernelRelease);
             if (string.IsNullOrEmpty((expectedSha256 ?? "").Trim()))
                 result.Add(CheckLevel.Notice, CheckCode.NoFingerprint, Path.GetFileName(zipPath));
             return zip;
+        }
+
+        /// <summary>The kernel image at the top of the zip (Image, Image.gz, Image.lz4, Image.gz-dtb, zImage...), read.</summary>
+        static KernelCompare.Kernel ReadKernel(ZipArchive archive)
+        {
+            foreach (ZipArchiveEntry e in archive.Entries)
+            {
+                string n = e.FullName;
+                if (n.Contains('/') || !(n.StartsWith("Image", StringComparison.Ordinal) || n.StartsWith("zImage", StringComparison.Ordinal) || n == "kernel"))
+                    continue;
+                string release = KernelCompare.ReadRelease(e.Open(), e.Length);
+                KernelCompare.Kernel k = KernelCompare.Parse(release);
+                if (k != null)
+                    return k;
+            }
+            return null;
         }
 
         /// <summary>

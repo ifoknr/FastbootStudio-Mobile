@@ -48,6 +48,15 @@ namespace FastbootStudio.Mobile.Core
 
         /// <summary>A script in the zip writes a partition no kernel needs, wipes storage, deletes data or uses the network.</summary>
         DangerousScript,
+
+        /// <summary>Another kernel series than the phone runs (5.10 on 6.1): it does not start.</summary>
+        KernelSeriesDiffers,
+
+        /// <summary>The same series, another kernel interface (android13-5.15 on android14-5.15).</summary>
+        KernelInterfaceDiffers,
+
+        /// <summary>The same kernel version as the phone runs.</summary>
+        KernelSame,
     }
 
     public sealed class CheckItem

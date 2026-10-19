@@ -274,14 +274,28 @@ namespace FastbootStudio.Mobile.Core.Tests
         }
 
         [Fact]
-        public void Another_kernel_interface_needs_the_name_typed_but_is_not_refused()
+        public void Another_kernel_interface_on_the_same_series_needs_the_name_typed()
         {
             using Samples s = new Samples();
-            string path = s.File("boot.img", Samples.BootImage(true, "6.6.30-android15-8-gabcdef"));
-            CheckResult r = ImageCheck.FromFile(path, "boot_a", 64 << 20, Running("6.1.75-android14-11-g1234"));
-            Assert.Contains(r.Items, i => i.Code == CheckCode.BootCheck && i.Values[0] == "KmiMismatch" && i.Level == CheckLevel.Warn);
+            string path = s.File("boot.img", Samples.BootImage(true, "5.15.123-android14-8-gabcdef"));
+            CheckResult r = ImageCheck.FromFile(path, "boot_a", 64 << 20, Running("5.15.104-android13-8-g1234"));
+            Assert.Contains(r.Items, i => i.Code == CheckCode.KernelInterfaceDiffers && i.Level == CheckLevel.Warn
+                && i.Values[0] == "android14-5.15" && i.Values[1] == "android13-5.15");
             Assert.Equal(CheckLevel.Warn, r.Verdict);
             Assert.True(r.CanFlash);
+        }
+
+        [Fact]
+        public void Another_kernel_series_is_refused_unless_developer_mode_is_on()
+        {
+            using Samples s = new Samples();
+            string path = s.File("boot.img", Samples.BootImage(true, "5.10.107-android13-4-gabcdef"));
+            CheckResult r = ImageCheck.FromFile(path, "boot_a", 64 << 20, Running("6.1.162-android14-5-g58715584"));
+            CheckItem item = Assert.Single(r.Items, i => i.Code == CheckCode.KernelSeriesDiffers);
+            Assert.Equal(new[] { "5.10.107", "6.1.162", "image" }, item.Values);
+            Assert.False(r.CanFlashFor(false));
+            Assert.True(r.CanFlashFor(true));
+            Assert.Equal(CheckLevel.Warn, r.VerdictFor(true));
         }
     }
 

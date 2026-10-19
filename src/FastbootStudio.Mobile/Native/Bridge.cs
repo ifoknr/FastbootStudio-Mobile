@@ -390,6 +390,9 @@ namespace FastbootStudio.Mobile.Native
             r["block"] = zip.Block;
             r["versions"] = zip.SupportedVersions;
             r["sha256"] = zip.Sha256;
+            r["kernelVersion"] = zip.Kernel?.Numbers;
+            r["kernelKmi"] = zip.Kernel?.Kmi;
+            r["kernelSource"] = zip.Kernel?.Source;
             return r;
         }
 

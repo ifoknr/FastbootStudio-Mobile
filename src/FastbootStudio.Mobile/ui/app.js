@@ -226,7 +226,7 @@ P.kernel = () => {
   const chipTop = st.s.dev ? chip('warn', t('وضع المطور', 'Developer mode')) : chip('ok', 'AK3');
   const top = head(t('تفليش كيرنل', 'Flash a kernel'), t(`ملف ${L('AnyKernel3 zip')}`, 'An AnyKernel3 zip'), chipTop);
   const info = c ? `<div class="card"><h2>${t('محتوى الملف', 'Inside the zip')} ${c.check.items.some(i => i.code === 'NotAnyKernel' || i.code === 'UnsafeZipEntry') ? chip('bad', '✗') : chip('ok', 'AnyKernel3')}</h2>
-    ${rows([c.kernel ? [t('الكيرنل', 'Kernel'), esc(c.kernel)] : null, c.devices && c.devices.length ? [t('الأجهزة', 'Devices'), esc(c.devices.join(', '))] : null,
+    ${rows([c.kernel ? [t('الكيرنل', 'Kernel'), esc(c.kernel)] : null, c.kernelVersion ? [t('الإصدار', 'Version'), esc(c.kernelVersion + (c.kernelKmi ? ' · ' + c.kernelKmi : ''))] : null, c.devices && c.devices.length ? [t('الأجهزة', 'Devices'), esc(c.devices.join(', '))] : null,
       [t('القسم', 'Partition'), esc(c.block && c.block !== 'auto' ? c.block : 'boot (auto)')], c.versions ? [t('أندرويد', 'Android'), esc(c.versions)] : null,
       [t('فحص الجهاز', 'Device check'), c.deviceCheck ? t('مفعّل', 'On') : t('مقفل', 'Off'), A], ['SHA-256', esc(short(c.sha256))]])}</div>` : '';
   return top + `<main>
@@ -439,7 +439,7 @@ P.settings = () => {
       <div class="setrow"><div class="tx"><b>${t('أقل بطارية للتفليش', 'Lowest battery to flash')}</b></div></div>
       ${seg('minBattery', [[30, L('30%')], [50, L('50%')], [70, L('70%')]])}</div>
     <div class="card" style="border-color:var(--wline)"><h2>${t('وضع المطور', 'Developer mode')} <button class="toggle warn${s.dev ? ' on' : ''}" data-act="toggle" data-k="dev"></button></h2>
-      <div class="note" style="color:var(--text)">${t('يسمح بملفات مكتوبة لجهاز ثاني أو أندرويد ثاني، بعد ما تكتب اسم القسم.', 'Allows files made for another device or Android version, once you type the partition name.')}</div>
+      <div class="note" style="color:var(--text)">${t('يسمح بملفات مكتوبة لجهاز ثاني أو أندرويد ثاني أو كيرنل ثاني، بعد ما تكتب اسم القسم.', 'Allows files made for another device, Android version or kernel, once you type the partition name.')}</div>
       <div class="note" style="margin-top:6px;color:var(--danger)">${t('الملفات الخبيثة أو التالفة أو نسخ جوال ثاني تبقى ممنوعة دايماً.', 'Harmful or damaged files, and other phones’ backups, are always refused.')}</div></div>
   </main>` + nav();
 };
@@ -474,7 +474,7 @@ S.confirm = sh => {
     return sheet('danger', `<div class="banner bad">${svg('warn')}<div class="body"><div class="big">${t('ممنوع: الملف ما يناسب', 'Refused: this file does not fit')}</div><div class="note">${t('تفليشه ممكن يخلي الجوال ما يقلع.', 'Flashing it may leave the phone unable to start.')}</div></div></div>
       <div class="card" style="padding:10px 14px">${checkRows(c, ctx, true)}</div>
       <div class="note" style="color:var(--text)">${hard ? t('هذا الرفض ما يتغيّر حتى في وضع المطور، لأن الملف تالف أو خطير أو لجوال ثاني أو لقسم ثاني.', 'This cannot be overridden, not even in developer mode: the file is damaged, harmful, another phone’s or another partition’s.')
-        : over ? t('الملف مكتوب لجهاز أو أندرويد ثاني. وضع المطور في الإعدادات يسمح فيه على مسؤوليتك.', 'The file is made for another device or Android version. Developer mode in Settings allows it at your own risk.') : ''}</div>
+        : over ? t('الملف مكتوب لجهاز أو أندرويد أو كيرنل ثاني. وضع المطور في الإعدادات يسمح فيه على مسؤوليتك.', 'The file is made for another device, Android version or kernel. Developer mode in Settings allows it at your own risk.') : ''}</div>
       <button class="btn primary" data-act="sheetClose"><span>${t('رجوع واختيار ملف ثاني', 'Back, pick another file')}</span></button>`);
   }
   if (c.verdict === 'warn') {

@@ -94,9 +94,11 @@
       if (a.expected) items.push(item('ok', 'ExpectedHashMatches', [a.expected]));
       items.push(other ? item(settings.dev ? 'warn' : 'block', 'DeviceNotListed', ['sweet, sweetin', 'corot'], true) : item('ok', 'DeviceListed', ['corot, corotin', 'corot']));
       items.push(item('ok', 'AndroidSupported', ['14', '13 - 15']));
+      if (/5\.10/.test(name)) items.push(item(settings.dev ? 'warn' : 'block', 'KernelSeriesDiffers', ['5.10.107', '6.1.75', 'image'], true));
+      else items.push(item('notice', 'KernelVersionDiffers', ['6.1.162', '6.1.75']));
       if (!a.expected) items.push(item('notice', 'NoFingerprint', [name]));
       return keep('kernel', 'boot', result(items), 'boot', { kernel: other ? 'Kernel sweet v2.1 by dev' : 'Kernel corot v4.2 by dev', devices: other ? ['sweet', 'sweetin'] : ['corot', 'corotin'],
-        deviceCheck: true, block: 'auto', versions: '13 - 15', sha256: sha(name) });
+        deviceCheck: true, block: 'auto', versions: '13 - 15', sha256: sha(name), kernelVersion: /5\.10/.test(name) ? '5.10.107' : '6.1.162', kernelKmi: /5\.10/.test(name) ? 'android13-5.10' : 'android14-6.1', kernelSource: 'image' });
     },
     'kernel.run': async a => {
       const p = pending; pending = null;

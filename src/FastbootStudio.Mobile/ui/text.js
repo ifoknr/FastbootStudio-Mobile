@@ -42,6 +42,12 @@ function checkText(item, ctx) {
       : [t(`الملف مو صورة ${LE(v[0])}`, `Not a ${esc(v[0])} image`), LE(v[1])];
     case 'TooBig': return [t('الملف أكبر من القسم', 'The file is bigger than the partition'), L(`${esc(mib(+v[0]))} &gt; ${esc(mib(+v[1]))}`)];
     case 'EmptyFile': return [t('الملف فاضي أو ما ينقرا', 'The file is empty or unreadable'), LE(v[0])];
+    case 'KernelSeriesDiffers': return [t('الكيرنل ما يناسب جوالك', 'This kernel does not fit your phone'),
+      t(`الملف ${LE(v[0])} وجوالك ${LE(v[1])}: إصدار ثاني تماماً، الجوال ما راح يقلع فيه`, `The file is ${esc(v[0])} and your phone runs ${esc(v[1])}: another series, the phone will not start with it`)
+      + (v[2] === 'name' ? `<br>${t('(عرفناه من اسم الملف)', '(read from the file name)')}` : '')];
+    case 'KernelInterfaceDiffers': return [t('واجهة الكيرنل (KMI) مختلفة', 'Another kernel interface (KMI)'),
+      L(`${esc(v[1])} → ${esc(v[0])}`) + `<br>${t('ممكن ما تشتغل التعريفات ويعلق الإقلاع؛ النسخة التلقائية ترجّعه', 'Modules may not load and it may bootloop; the automatic backup undoes it')}`];
+    case 'KernelSame': return [t('نفس إصدار كيرنل جوالك', 'The same kernel version as your phone'), LE(v[0])];
     case 'KernelVersionDiffers': return [t('إصدار الكيرنل مختلف (عادي)', 'Different kernel version (normal)'), L(`${esc(v[1])} → ${esc(v[0])}`)];
     case 'NotAnyKernel': return [t('مو ملف AnyKernel3', 'Not an AnyKernel3 zip'), t('ما فيه anykernel.sh أو update-binary', 'No anykernel.sh or update-binary inside')];
     case 'UnsafeZipEntry': return [t('فيه مسار خطير داخل الملف', 'The zip has an unsafe path'), LE(v[0])];
