@@ -1,25 +1,59 @@
-name: telegram test
+name: secrets test
 
-# Checks the Telegram secrets without a release: which are set (never their values), whether
-# the bot token works, and posts one silent test message to the group (and topic).
+# Checks the release secrets without a release, never printing their values: that the signing
+# key opens with its passwords and alias, and that the Telegram bot reaches the group. With
+# "send", it also posts one silent test message to the group (and topic).
 on:
   workflow_dispatch:
+    inputs:
+      send:
+        description: "Post a silent test message to Telegram"
+        type: boolean
+        default: false
 
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: Check the secrets and send a test message
+      - name: Check the signing key
         env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
-          TELEGRAM_TOPIC: ${{ secrets.TELEGRAM_TOPIC }}
           KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          for n in TELEGRAM_TOKEN TELEGRAM_TO TELEGRAM_TOPIC KEYSTORE STORE_PASS KEY_ALIAS KEY_PASS; do
+          for n in KEYSTORE STORE_PASS KEY_ALIAS KEY_PASS; do
+            if [ -n "${!n}" ]; then echo "$n: set"; else echo "::error::$n is missing"; missing=1; fi
+          done
+          [ -z "$missing" ] || exit 1
+          if ! echo "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/k.jks" 2>/dev/null; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 is not valid base64: paste the whole file, nothing more."
+            exit 1
+          fi
+          if ! keytool -list -keystore "$RUNNER_TEMP/k.jks" -storepass "$STORE_PASS" -alias "$KEY_ALIAS" > "$RUNNER_TEMP/list.txt" 2>&1; then
+            echo "::error::The key does not open: $(grep -v '^Picked up' "$RUNNER_TEMP/list.txt" | head -2)"
+            rm -f "$RUNNER_TEMP/k.jks"
+            exit 1
+          fi
+          # The key password: signing a scratch file proves it.
+          echo test > "$RUNNER_TEMP/t.txt" && (cd "$RUNNER_TEMP" && jar cf t.jar t.txt)
+          if ! jarsigner -keystore "$RUNNER_TEMP/k.jks" -storepass "$STORE_PASS" -keypass "$KEY_PASS" "$RUNNER_TEMP/t.jar" "$KEY_ALIAS" > /dev/null 2>&1; then
+            echo "::error::ANDROID_KEY_PASSWORD does not open the key."
+            rm -f "$RUNNER_TEMP/k.jks"
+            exit 1
+          fi
+          echo "signing key: opens, alias found, key password works"
+          keytool -list -v -keystore "$RUNNER_TEMP/k.jks" -storepass "$STORE_PASS" -alias "$KEY_ALIAS" 2>/dev/null | grep -E "Owner:|SHA256:" | head -2
+          rm -f "$RUNNER_TEMP/k.jks"
+
+      - name: Check Telegram
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+          TELEGRAM_TOPIC: ${{ secrets.TELEGRAM_TOPIC }}
+          SEND: ${{ inputs.send }}
+        run: |
+          for n in TELEGRAM_TOKEN TELEGRAM_TO TELEGRAM_TOPIC; do
             if [ -n "${!n}" ]; then echo "$n: set"; else echo "$n: missing"; fi
           done
           if [ -z "$TELEGRAM_TOKEN" ] || [ -z "$TELEGRAM_TO" ]; then
@@ -39,6 +73,10 @@ jobs:
             exit 1
           fi
           echo "group: $(jq -r '.result.title // .result.username' <<< "$chat") ($(jq -r .result.type <<< "$chat"), topics: $(jq -r '.result.is_forum // false' <<< "$chat"))"
+          if [ "$SEND" != true ]; then
+            echo "no test message (run with send to post one)"
+            exit 0
+          fi
           args=(--form-string "chat_id=$TELEGRAM_TO" --form-string disable_notification=true
                 --form-string "text=🧪 Fastboot Studio Mobile: test message from GitHub Actions. اختبار: البوت يقدر ينشر هنا ✓")
           [ -n "$TELEGRAM_TOPIC" ] && args+=(--form-string "message_thread_id=$TELEGRAM_TOPIC")
