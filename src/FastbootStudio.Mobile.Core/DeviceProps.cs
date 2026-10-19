@@ -90,6 +90,74 @@ namespace FastbootStudio.Mobile.Core
             }
         }
 
+        /// <summary>
+        /// The bootloader as the phone really is. Root needs a modified boot image, which a locked
+        /// bootloader does not start, so a phone with working root is unlocked whatever its
+        /// properties say: modules that pass Play Integrity (SUSFS, Tricky Store...) set
+        /// ro.boot.* to "locked" and "green". The kernel command line or bootconfig, read as
+        /// root, usually still has the real values.
+        /// </summary>
+        public BootState Boot(bool root, string kernelArgs)
+        {
+            Dictionary<string, string> k = KernelArgs(kernelArgs);
+            bool? fromKernel = UnlockedFrom(Arg(k, "androidboot.vbmeta.device_state"), Arg(k, "androidboot.flash.locked"), Arg(k, "androidboot.verifiedbootstate"));
+            bool? fromProps = Unlocked;
+            BootState b = new BootState { Avb = Arg(k, "androidboot.verifiedbootstate") ?? VerifiedBootState };
+            if (root)
+            {
+                b.Unlocked = true;
+                b.Hidden = fromProps == false || fromKernel == false;
+                if (b.Hidden && b.Avb != "orange")
+                    b.Avb = "orange";
+            }
+            else
+                b.Unlocked = fromKernel ?? fromProps;
+            return b;
+        }
+
+        static bool? UnlockedFrom(string deviceState, string flashLocked, string verifiedBoot)
+        {
+            if (deviceState == "unlocked") return true;
+            if (deviceState == "locked") return false;
+            if (flashLocked == "0") return true;
+            if (flashLocked == "1") return false;
+            if (verifiedBoot == "orange") return true;
+            if (verifiedBoot == "green" || verifiedBoot == "yellow") return false;
+            return null;
+        }
+
+        static string Arg(Dictionary<string, string> k, string key) => k.TryGetValue(key, out string v) && v.Length > 0 ? v : null;
+
+        static readonly Regex BootconfigLine = new Regex(@"^\s*(androidboot\.[A-Za-z0-9_.]+)\s+=\s+(.*)$");
+
+        /// <summary>/proc/bootconfig lines (androidboot.x = "y") and /proc/cmdline words (androidboot.x=y).</summary>
+        static Dictionary<string, string> KernelArgs(string text)
+        {
+            Dictionary<string, string> k = new Dictionary<string, string>(StringComparer.Ordinal);
+            void Add(string key, string value)
+            {
+                key = key.Trim();
+                if (key.StartsWith("androidboot.", StringComparison.Ordinal) && !k.ContainsKey(key))
+                    k[key] = value.Trim().Trim('"');
+            }
+            foreach (string line in (text ?? "").Replace("\r", "").Split('\n'))
+            {
+                Match m = BootconfigLine.Match(line);
+                if (m.Success)
+                {
+                    Add(m.Groups[1].Value, m.Groups[2].Value);
+                    continue;
+                }
+                foreach (string word in line.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    int eq = word.IndexOf('=');
+                    if (eq > 0)
+                        Add(word.Substring(0, eq), word.Substring(eq + 1));
+                }
+            }
+            return k;
+        }
+
         public string Kmi => KernelInfo.FromRelease(KernelRelease)?.Kmi;
 
         /// <summary>The identity the checks compare files against.</summary>
@@ -109,5 +177,17 @@ namespace FastbootStudio.Mobile.Core
             }
             return id;
         }
+    }
+
+    public sealed class BootState
+    {
+        /// <summary>True unlocked, false locked, null unknown.</summary>
+        public bool? Unlocked { get; set; }
+
+        /// <summary>The properties say locked while root works: a module hides the real state from apps.</summary>
+        public bool Hidden { get; set; }
+
+        /// <summary>The verified boot state, the real one when it could be read.</summary>
+        public string Avb { get; set; }
     }
 }

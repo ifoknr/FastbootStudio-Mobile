@@ -51,5 +51,39 @@ namespace FastbootStudio.Mobile.Core.Tests
             Assert.False(DeviceProps.Parse("[ro.boot.verifiedbootstate]: [green]", "").Unlocked);
             Assert.Null(DeviceProps.Parse("", "").Unlocked);
         }
+
+        // An Infinix X6878 with KernelSU and a module that passes Play Integrity.
+        const string Spoofed = "[ro.boot.vbmeta.device_state]: [locked]\n[ro.boot.verifiedbootstate]: [green]\n[ro.boot.flash.locked]: [1]\n";
+
+        [Fact]
+        public void Working_root_means_unlocked_even_when_a_module_says_locked()
+        {
+            BootState b = DeviceProps.Parse(Spoofed, "").Boot(true, "");
+            Assert.True(b.Unlocked);
+            Assert.True(b.Hidden);
+            Assert.Equal("orange", b.Avb);
+        }
+
+        [Fact]
+        public void The_kernel_arguments_give_the_real_state()
+        {
+            string bootconfig = "androidboot.verifiedbootstate = \"orange\"\nandroidboot.vbmeta.device_state = \"unlocked\"\n";
+            BootState noRoot = DeviceProps.Parse(Spoofed, "").Boot(false, bootconfig);
+            Assert.True(noRoot.Unlocked);
+            Assert.Equal("orange", noRoot.Avb);
+            BootState cmdline = DeviceProps.Parse("", "").Boot(false, "console=ttyMSM0 androidboot.vbmeta.device_state=locked androidboot.verifiedbootstate=green");
+            Assert.False(cmdline.Unlocked);
+            Assert.False(cmdline.Hidden);
+        }
+
+        [Fact]
+        public void Without_root_or_kernel_arguments_the_properties_decide()
+        {
+            BootState b = DeviceProps.Parse(Spoofed, "").Boot(false, null);
+            Assert.False(b.Unlocked);
+            Assert.False(b.Hidden);
+            Assert.True(DeviceProps.Parse("[ro.boot.vbmeta.device_state]: [unlocked]", "").Boot(true, "").Unlocked);
+            Assert.False(DeviceProps.Parse("[ro.boot.vbmeta.device_state]: [unlocked]", "").Boot(true, "").Hidden);
+        }
     }
 }

@@ -139,7 +139,7 @@ const P = {};
 P.device = () => {
   const p = st.phone;
   if (!p) return head(t('الجهاز', 'Device'), t('يقرا الجوال…', 'Reading the phone…')) + `<main>${st.phoneErr ? errBanner(st.phoneErr) : spinner(t('يقرا معلومات الجهاز…', 'Reading the device…'))}</main>`;
-  const unlocked = p.unlocked === true ? t('مفتوح', 'Unlocked') : p.unlocked === false ? t('مقفل', 'Locked') : t('غير معروف', 'Unknown');
+  const unlocked = p.unlocked === true ? (p.bootHidden ? t('مفتوح (مخفي بإضافة)', 'Unlocked (hidden by a module)') : t('مفتوح', 'Unlocked')) : p.unlocked === false ? t('مقفل', 'Locked') : t('غير معروف', 'Unknown');
   const avbKind = { green: 'ok', yellow: 'warn', orange: 'warn', red: 'bad' }[p.avb] || '';
   const mine = (st.backups || []).filter(b => b.mine);
   const today = mine.some(b => isToday(b.name));
@@ -165,7 +165,7 @@ P.device = () => {
     ${rows([[t('الكيرنل', 'Kernel'), esc(p.kernel)], p.kmi ? ['KMI', esc(p.kmi)] : null, [t('البوت لودر', 'Bootloader'), unlocked, A],
       p.selinux ? ['SELinux', esc(p.selinux)] : null, [t('الروت', 'Root'), esc(p.rootManager || t('متاح', 'Granted')), !p.rootManager && A]])}</div>
     <div class="card"><h2>${t('جاهزية التفليش', 'Ready to flash')}</h2>
-      <div class="check"><span class="dot ${p.unlocked === false ? 'bad' : p.unlocked ? 'ok' : 'info'}"></span><span>${p.unlocked === false ? t('البوت لودر مقفل: الصور المعدّلة ما تقلع', 'Bootloader locked: modified images will not boot') : p.unlocked ? t('البوت لودر مفتوح: الصور المعدّلة تقلع', 'Bootloader unlocked: modified images boot') : t('ما قدرنا نعرف حالة البوت لودر', 'The bootloader state is unknown')}</span></div>
+      <div class="check"><span class="dot ${p.unlocked === false ? 'bad' : p.unlocked ? 'ok' : 'info'}"></span><span>${p.unlocked === false ? t('البوت لودر مقفل: الصور المعدّلة ما تقلع', 'Bootloader locked: modified images will not boot') : p.unlocked ? (p.bootHidden ? t('البوت لودر مفتوح، وإضافة عندك تخفيه عن التطبيقات (عادي مع Play Integrity)', 'Bootloader unlocked; a module hides it from apps (normal with Play Integrity)') : t('البوت لودر مفتوح: الصور المعدّلة تقلع', 'Bootloader unlocked: modified images boot')) : t('ما قدرنا نعرف حالة البوت لودر', 'The bootloader state is unknown')}</span></div>
       <div class="check"><span class="dot ok"></span><span>${t('صلاحية الروت متاحة للتطبيق', 'Root access granted to the app')}</span></div>
       <div class="check"><span class="dot ${battOk ? 'ok' : 'bad'}"></span>${p.battery < 0 ? t('ما قدرنا نقرا البطارية', 'Battery level unknown') : battOk
         ? t(`البطارية ${L(p.battery + '%')}: فوق الحد الأدنى ${L(st.s.minBattery + '%')}`, `Battery ${p.battery}%: above the ${st.s.minBattery}% minimum`)

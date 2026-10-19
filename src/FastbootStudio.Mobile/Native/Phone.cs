@@ -37,24 +37,26 @@ namespace FastbootStudio.Mobile.Native
             string props = Root ? su.Run("getprop").Output : "";
             Props = DeviceProps.Parse(props.Length > 0 ? props : Run("getprop"), Java.Lang.JavaSystem.GetProperty("os.version"));
             Partitions = Root ? Flasher.Partitions() : new List<string>();
-            string manager = null, selinux = null;
+            string manager = null, selinux = null, kernelArgs = null;
             if (Root)
             {
                 manager = su.Run("if [ -x /data/adb/ksud ]; then echo \"KernelSU $(/data/adb/ksud -V 2>/dev/null | cut -d' ' -f2)\"; "
                     + "elif [ -x /data/adb/apd ]; then echo APatch; elif command -v magisk >/dev/null 2>&1; then echo \"Magisk $(magisk -v | cut -d: -f1)\"; fi").Output.Trim();
                 selinux = su.Run("getenforce").Output.Trim();
+                kernelArgs = su.Run("cat /proc/bootconfig 2>/dev/null; echo; cat /proc/cmdline 2>/dev/null").Output;
             }
             BatteryManager battery = (BatteryManager)context.GetSystemService(Context.BatteryService);
             int level = battery?.GetIntProperty((int)BatteryProperty.Capacity) ?? -1;
             string slot = Props.Slot;
+            BootState boot = Props.Boot(Root, kernelArgs);
             JsonObject o = new JsonObject
             {
                 ["root"] = Root, ["rootManager"] = manager, ["selinux"] = selinux,
                 ["model"] = Props.Model, ["name"] = Props.Get("ro.product.marketname") ?? Props.Get("ro.product.vendor.marketname"), ["brand"] = Props.Brand, ["codename"] = Props.Device, ["product"] = Props.Product,
                 ["serial"] = Props.Serial, ["android"] = Props.Android, ["sdk"] = Props.Sdk, ["patch"] = Props.PatchLevel,
                 ["slot"] = slot, ["ab"] = Props.AB, ["dynamic"] = Props.Dynamic, ["platform"] = Props.Platform, ["abi"] = Props.Abi,
-                ["vendor"] = Props.Vendor, ["kernel"] = Props.KernelRelease, ["kmi"] = Props.Kmi, ["avb"] = Props.VerifiedBootState,
-                ["unlocked"] = Props.Unlocked, ["battery"] = level,
+                ["vendor"] = Props.Vendor, ["kernel"] = Props.KernelRelease, ["kmi"] = Props.Kmi, ["avb"] = boot.Avb,
+                ["unlocked"] = boot.Unlocked, ["bootHidden"] = boot.Hidden, ["battery"] = level,
                 ["targets"] = Json.Strings(FlashTargets.Allowed.Where(b => FlashTargets.Resolve(b, slot, Partitions) != null)),
             };
             return o;
