@@ -27,6 +27,16 @@ namespace FastbootStudio.Mobile.Native
         /// <summary>The lowest battery level a flash on this phone starts at.</summary>
         public int MinBattery => prefs.GetInt("minBattery", 50);
 
+        /// <summary>Look for a new version once a day; off, the person checks from Settings.</summary>
+        public bool AutoUpdate => prefs.GetBoolean("autoUpdate", true);
+
+        /// <summary>When the update check last ran (UTC ticks), so it runs at most once a day.</summary>
+        public long LastUpdateCheck
+        {
+            get => prefs.GetLong("lastUpdateCheck", 0);
+            set { using (ISharedPreferencesEditor e = prefs.Edit()) { e.PutLong("lastUpdateCheck", value); e.Apply(); } }
+        }
+
         /// <summary>Changes one setting; anything not listed here, or out of range, is ignored.</summary>
         public void Set(string key, JsonNode value)
         {
@@ -45,6 +55,7 @@ namespace FastbootStudio.Mobile.Native
                             e.PutString("lang", lang);
                         break;
                     case "dev":
+                    case "autoUpdate":
                     case "backupFirst":
                     case "readBack":
                         if (value != null && (value.GetValueKind() == JsonValueKind.True || value.GetValueKind() == JsonValueKind.False))
@@ -69,7 +80,7 @@ namespace FastbootStudio.Mobile.Native
         public JsonObject ToJson() => new JsonObject
         {
             ["theme"] = Theme, ["lang"] = Lang, ["dev"] = DeveloperMode, ["backupFirst"] = BackupFirst,
-            ["readBack"] = ReadBack, ["minBattery"] = MinBattery,
+            ["readBack"] = ReadBack, ["minBattery"] = MinBattery, ["autoUpdate"] = AutoUpdate,
         };
     }
 }

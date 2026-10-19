@@ -122,6 +122,8 @@ function errText(code) {
     'too-big-for-download': t('الملف أكبر من اللي يستقبله البوت لودر مرة وحدة', 'The file is bigger than the bootloader accepts at once'),
     'otg-failed': t('الجوال الموصول رفض', 'The connected phone refused'),
     'bad-link': t('رابط مو مسموح', 'Link not allowed'),
+    'update-offline': t('ما فيه اتصال بالإنترنت', 'No internet connection'),
+    'update-failed': t('GitHub ما رد، جرّب بعدين', 'GitHub did not answer; try later'),
     'bad-set': t('نوع النسخة مو معروف', 'Unknown backup set'),
     'companion-missing': t('الإضافة مو مركّبة أو موقفة', 'The Companion module is missing or disabled'),
     'companion-busy': t('الإضافة تاخذ نسخة ثانية الحين', 'The module is already taking a backup'),

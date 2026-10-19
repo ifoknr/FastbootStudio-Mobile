@@ -63,6 +63,8 @@ const st = {
   backups: null, bk: {}, bkOpen: null,
   // The Companion module, looked for only with root: {installed, version, enabled, usable}.
   comp: null,
+  // The update check: {checking, result {installed, latest, newer, page, none}, err, hidden}.
+  upd: {},
   // This phone's flash page: src is {type:'backup', name, file} or {type:'file', token, name, size}.
   f: { src: null, base: null, other: false, expected: '', check: null, checking: false, err: null },
   // An AnyKernel3 zip picked on the flash page.
@@ -152,7 +154,7 @@ P.device = () => {
       [t('السلوت', 'Slot'), esc([p.slot || t('بدون', 'none'), p.ab ? 'A/B' : null, p.dynamic ? 'dynamic' : null].filter(Boolean).join(' · ')), !p.slot && A],
       p.serial ? [t('الرقم', 'Serial'), esc(p.serial)] : null])}</div>`;
   if (!p.root)
-    return top + `<main>${device}
+    return top + `<main>${updateBanner()}${device}
       <div class="banner warn">${svg('lock')}<div class="body"><div class="big">${t('التفليش على هذا الجوال يحتاج روت', 'Flashing this phone needs root')}</div>
       <div class="note">${t('ما لقينا صلاحية الروت. إذا عندك روت، وافق على طلب الصلاحية من مدير الروت وحدّث. وقائمة OTG تشتغل بدون روت عشان تنقذ جوال ثاني.', 'No root access was found. If the phone is rooted, allow the app in your root manager and refresh. The OTG menu works without root to rescue another phone.')}</div></div></div>
       <div class="card"><h2>${t('وش يشتغل', 'What works')}</h2>
@@ -160,7 +162,7 @@ P.device = () => {
         <div class="check"><span class="dot ok"></span><span>${t('إنقاذ جوال ثاني بالـ OTG', 'Rescue another phone over OTG')}</span></div>
         <div class="check"><span class="dot bad"></span><span>${t('التفليش والنسخ على هذا الجوال', 'Flashing and backups on this phone')}</span></div></div>
       <button class="btn" data-act="refresh">${svg('refresh')}<span>${t('تحديث', 'Refresh')}</span></button></main>` + nav();
-  return top + `<main>${device}
+  return top + `<main>${updateBanner()}${device}
     <div class="card"><h2>${t('الكيرنل والحماية', 'Kernel and security')} ${p.avb ? chip(avbKind, 'AVB ' + esc(p.avb)) : ''}</h2>
     ${rows([[t('الكيرنل', 'Kernel'), esc(p.kernel)], p.kmi ? ['KMI', esc(p.kmi)] : null, [t('البوت لودر', 'Bootloader'), unlocked, A],
       p.selinux ? ['SELinux', esc(p.selinux)] : null, [t('الروت', 'Root'), esc(p.rootManager || t('متاح', 'Granted')), !p.rootManager && A]])}</div>
@@ -176,6 +178,15 @@ P.device = () => {
     <button class="btn" data-act="refresh" ${st.refreshing ? 'disabled' : ''}>${svg('refresh')}<span>${t('تحديث', 'Refresh')}</span></button>
   </main>` + nav();
 };
+
+// A newer version on GitHub: shown on the Device page until closed.
+function updateBanner() {
+  const r = st.upd.result;
+  if (!r || !r.newer || st.upd.hidden) return '';
+  return `<div class="banner info">${svg('info')}<div class="body"><div class="big">${t(`فيه إصدار جديد ${LE('v' + r.latest)}`, `Version ${esc('v' + r.latest)} is out`)}</div>
+    <div class="note">${t(`عندك ${LE('v' + r.installed)}. نزّله من صفحة الإصدار وركّبه فوق اللي عندك.`, `You have ${esc('v' + r.installed)}. Download it from the release page and install it over this one.`)}</div>
+    <div class="row2" style="margin-top:10px"><button class="btn sm noticeb" data-act="link" data-v="${esc(r.page)}"><span>${t('صفحة التحميل', 'Download page')}</span></button><button class="btn sm" data-act="updHide"><span>${t('بعدين', 'Later')}</span></button></div></div></div>`;
+}
 
 // Shown only when the module is installed (and so only with root).
 function companionCard() {
@@ -438,6 +449,12 @@ P.settings = () => {
       ${tog('readBack', t('قراءة بعد الكتابة', 'Read back after writing'), t('يقارن القسم بالملف بعد التفليش', 'Compares the partition with the file'))}
       <div class="setrow"><div class="tx"><b>${t('أقل بطارية للتفليش', 'Lowest battery to flash')}</b></div></div>
       ${seg('minBattery', [[30, L('30%')], [50, L('50%')], [70, L('70%')]])}</div>
+    <div class="card"><h2>${t('التحديثات', 'Updates')}</h2>
+      ${tog('autoUpdate', t('تحقق تلقائياً من التحديثات', 'Check for updates automatically'), t('مرة باليوم من صفحة GitHub. لو قفلته، تتحقق بنفسك من هنا', 'Once a day, from GitHub. Off: you check yourself, here'))}
+      <div class="setrow"><div class="tx"><b>${t('الإصدار', 'Version')} ${LE('v' + st.version)}</b><small>${updateLine()}</small></div>
+        <button class="btn sm" style="width:auto" data-act="updCheck" ${st.upd.checking ? 'disabled' : ''}><span>${t('تحقق الحين', 'Check now')}</span></button></div>
+      ${st.upd.result && st.upd.result.newer ? `<button class="btn sm noticeb" data-act="link" data-v="${esc(st.upd.result.page)}"><span>${t(`نزّل ${LE('v' + st.upd.result.latest)}`, `Get ${esc('v' + st.upd.result.latest)}`)}</span></button>` : ''}
+      <div class="note" style="margin-top:6px">${t('التطبيق ما ينزّل ولا يركّب شي بنفسه: يفتح لك صفحة الإصدار وأنت تركّب.', 'The app never downloads or installs anything itself: it opens the release page and you install.')}</div></div>
     <div class="card" style="border-color:var(--wline)"><h2>${t('وضع المطور', 'Developer mode')} <button class="toggle warn${s.dev ? ' on' : ''}" data-act="toggle" data-k="dev"></button></h2>
       <div class="note" style="color:var(--text)">${t('يسمح بملفات مكتوبة لجهاز ثاني أو أندرويد ثاني أو كيرنل ثاني، بعد ما تكتب اسم القسم.', 'Allows files made for another device, Android version or kernel, once you type the partition name.')}</div>
       <div class="note" style="margin-top:6px;color:var(--danger)">${t('الملفات الخبيثة أو التالفة أو نسخ جوال ثاني تبقى ممنوعة دايماً.', 'Harmful or damaged files, and other phones’ backups, are always refused.')}</div></div>
@@ -458,7 +475,7 @@ P.about = () => head(t('حول', 'About'), 'Fastboot Studio Mobile', '', true) +
   <div class="card list">
     ${[['https://t.me/IFOKNR1', 'tg', t('تواصل', 'Contact'), '@IFOKNR1'], ['https://github.com/ifoknr', 'gh', 'GitHub', 'ifoknr'], ['https://github.com/ifoknr/FastbootStudio', 'pc', 'Fastboot Studio (Windows)', 'github.com/ifoknr/FastbootStudio']].map(([u, i, b, s]) => `<button class="it" data-act="link" data-v="${u}"><div class="ic">${svg(i)}</div><div><b>${b}</b><small class="ltr">${s}</small></div><span class="chev">${A ? '‹' : '›'}</span></button>`).join('')}
   </div>
-  <div class="note">${t('التطبيق يقرا ويكتب على الجوال بس، وما يرسل أي بيانات لأي جهة. الخطوط Roboto و Noto Kufi Arabic برخصة OFL.', 'The app only reads and writes the phone; it sends no data anywhere. Fonts: Roboto and Noto Kufi Arabic, under the OFL.')}</div>
+  <div class="note">${t('التطبيق ما يرسل أي بيانات لأي جهة. الاتصال الوحيد: يسأل GitHub عن آخر إصدار، إذا التحقق من التحديثات شغّال. الخطوط Roboto و Noto Kufi Arabic برخصة OFL.', 'The app sends no data anywhere. Its only connection asks GitHub for the latest version, when the update check is on. Fonts: Roboto and Noto Kufi Arabic, under the OFL.')}</div>
 </main>` + nav();
 
 // ---------------------------------------------------------------- sheets
@@ -589,6 +606,26 @@ async function refresh() {
   render();
   if (st.phone && st.phone.root) { loadBackups(); loadCompanion(); }
   else st.comp = null;
+}
+
+function updateLine() {
+  const u = st.upd;
+  if (u.checking) return t('يتحقق…', 'Checking…');
+  if (u.err) return errText(u.err);
+  const r = u.result;
+  if (!r) return st.s.autoUpdate ? t('يتحقق تلقائياً مرة باليوم', 'Checked once a day') : t('التحقق التلقائي مقفل', 'Automatic check is off');
+  if (r.none) return t('للحين ما فيه إصدار منشور', 'No release published yet');
+  return r.newer ? t(`فيه إصدار جديد ${LE('v' + r.latest)}`, `Version ${esc('v' + r.latest)} is out`) : t('عندك آخر إصدار ✓', 'You have the latest version ✓');
+}
+
+async function checkUpdates(force) {
+  st.upd.checking = true; st.upd.err = null; render();
+  try {
+    const r = await call('update.check', { force });
+    if (!r.skipped) st.upd.result = r;
+  } catch (e) { if (force) st.upd.err = e.message; }
+  st.upd.checking = false;
+  render();
 }
 
 async function loadCompanion() {
@@ -863,6 +900,8 @@ const actions = {
     try { st.s = await call('settings.set', { key: 'dev', value: true }); } catch (e) { fail(e); }
     recheck(); render();
   },
+  updCheck: () => checkUpdates(true),
+  updHide: () => { st.upd.hidden = true; render(); },
   logs: async () => { try { st.logs = await call('logs'); } catch (e) { st.logs = []; } render(); },
   copyLogs: () => call('copy', { text: st.logs.join('\n') }).then(() => toast(t('انسخ السجل', 'Log copied'))).catch(fail),
 };
@@ -915,6 +954,7 @@ async function start() {
   applyLook();
   render();
   refresh();
+  checkUpdates(false);
 }
 
 if (window.fbsNative) start();

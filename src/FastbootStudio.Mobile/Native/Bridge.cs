@@ -147,6 +147,8 @@ namespace FastbootStudio.Mobile.Native
                 case "copy":
                     activity.Copy(Json.Str(a, "text") ?? "");
                     return null;
+                case "update.check":
+                    return await UpdateCheckRun(Json.Bool(a, "force"));
                 case "open":
                     activity.Open(Json.Str(a, "url"));
                     return null;
@@ -478,6 +480,52 @@ namespace FastbootStudio.Mobile.Native
                 throw new BridgeError("bad-target");
             SuShell.Instance.Run(target == null ? "svc power reboot || reboot" : "reboot " + target);
             return null;
+        }
+
+        // ---------------------------------------------------------------- updates
+
+        static readonly System.Net.Http.HttpClient Http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+
+        /// <summary>
+        /// The latest release against this version. Automatic checks run once a day and only
+        /// when allowed in Settings; "Check now" always runs. Nothing is downloaded here.
+        /// </summary>
+        async Task<JsonNode> UpdateCheckRun(bool force)
+        {
+            long now = DateTime.UtcNow.Ticks;
+            if (!force && (!settings.AutoUpdate || now - settings.LastUpdateCheck < UpdateCheck.Every.Ticks))
+                return new JsonObject { ["skipped"] = true };
+            settings.LastUpdateCheck = now;
+            string installed = activity.Version;
+            using (System.Net.Http.HttpRequestMessage request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, UpdateCheck.Api))
+            {
+                request.Headers.UserAgent.ParseAdd("FastbootStudio-Mobile/" + installed);
+                request.Headers.Accept.ParseAdd("application/vnd.github+json");
+                System.Net.Http.HttpResponseMessage response;
+                try { response = await Http.SendAsync(request); }
+                catch (Exception e) when (e is System.Net.Http.HttpRequestException || e is TaskCanceledException)
+                {
+                    Log.Add("update check: " + e.Message);
+                    throw new BridgeError("update-offline");
+                }
+                using (response)
+                {
+                    if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+                        return new JsonObject { ["installed"] = installed, ["none"] = true };
+                    if (!response.IsSuccessStatusCode)
+                        throw new BridgeError("update-failed: " + (int)response.StatusCode);
+                    UpdateCheck.Release r = UpdateCheck.Parse(await response.Content.ReadAsStringAsync());
+                    if (r == null)
+                        return new JsonObject { ["installed"] = installed, ["none"] = true };
+                    bool newer = UpdateCheck.IsNewer(r.Version, installed);
+                    Log.Add("update check: latest " + r.Version + ", installed " + installed + (newer ? " (newer)" : ""));
+                    return new JsonObject
+                    {
+                        ["installed"] = installed, ["latest"] = r.Version, ["newer"] = newer, ["page"] = r.Page,
+                        ["apk"] = r.Apk, ["bytes"] = r.ApkBytes,
+                    };
+                }
+            }
         }
 
         // ---------------------------------------------------------------- OTG
