@@ -1,0 +1,52 @@
+name: telegram test
+
+# Checks the Telegram secrets without a release: which are set (never their values), whether
+# the bot token works, and posts one silent test message to the group (and topic).
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the secrets and send a test message
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+          TELEGRAM_TOPIC: ${{ secrets.TELEGRAM_TOPIC }}
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          for n in TELEGRAM_TOKEN TELEGRAM_TO TELEGRAM_TOPIC KEYSTORE STORE_PASS KEY_ALIAS KEY_PASS; do
+            if [ -n "${!n}" ]; then echo "$n: set"; else echo "$n: missing"; fi
+          done
+          if [ -z "$TELEGRAM_TOKEN" ] || [ -z "$TELEGRAM_TO" ]; then
+            echo "::error::TELEGRAM_TOKEN and TELEGRAM_TO are needed."
+            exit 1
+          fi
+          api="https://api.telegram.org/bot$TELEGRAM_TOKEN"
+          me=$(curl -sS "$api/getMe")
+          if [ "$(jq -r .ok <<< "$me")" != true ]; then
+            echo "::error::The bot token is refused: $(jq -r .description <<< "$me")"
+            exit 1
+          fi
+          echo "bot: @$(jq -r .result.username <<< "$me")"
+          chat=$(curl -sS "$api/getChat" --data-urlencode "chat_id=$TELEGRAM_TO")
+          if [ "$(jq -r .ok <<< "$chat")" != true ]; then
+            echo "::error::The group is not reachable: $(jq -r .description <<< "$chat")"
+            exit 1
+          fi
+          echo "group: $(jq -r '.result.title // .result.username' <<< "$chat") ($(jq -r .result.type <<< "$chat"), topics: $(jq -r '.result.is_forum // false' <<< "$chat"))"
+          args=(--form-string "chat_id=$TELEGRAM_TO" --form-string disable_notification=true
+                --form-string "text=🧪 Fastboot Studio Mobile: test message from GitHub Actions. اختبار: البوت يقدر ينشر هنا ✓")
+          [ -n "$TELEGRAM_TOPIC" ] && args+=(--form-string "message_thread_id=$TELEGRAM_TOPIC")
+          sent=$(curl -sS "${args[@]}" "$api/sendMessage")
+          if [ "$(jq -r .ok <<< "$sent")" != true ]; then
+            echo "::error::The test message was not sent: $(jq -r .description <<< "$sent")"
+            exit 1
+          fi
+          echo "sent: message $(jq -r .result.message_id <<< "$sent")$( [ -n "$TELEGRAM_TOPIC" ] && echo " in topic $(jq -r '.result.message_thread_id // "none"' <<< "$sent")")"
+          admin=$(curl -sS "$api/getChatMember" --data-urlencode "chat_id=$TELEGRAM_TO" -d "user_id=$(jq -r .result.id <<< "$me")")
+          echo "bot is: $(jq -r .result.status <<< "$admin"), can pin: $(jq -r '.result.can_pin_messages // "n/a"' <<< "$admin")"
