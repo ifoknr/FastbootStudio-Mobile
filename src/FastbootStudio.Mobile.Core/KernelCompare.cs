@@ -72,13 +72,16 @@ namespace FastbootStudio.Mobile.Core
                 result.Add(CheckLevel.Ok, CheckCode.KernelSame, file.Numbers, file.Source);
         }
 
+        /// <summary>The largest kernel read, packed or unpacked: kernels are 20–60 MiB, and a phone has little memory to spare.</summary>
+        public const int MaxKernel = 96 << 20;
+
         /// <summary>
         /// The "Linux version x.y.z..." release of a kernel image (Image, Image.gz, Image.lz4,
         /// Image.gz-dtb...), or null when it cannot be read.
         /// </summary>
         public static string ReadRelease(Stream stream, long length)
         {
-            if (length <= 0 || length > BootImageAnalysis.MaxUnpacked)
+            if (length <= 0 || length > MaxKernel)
                 return null;
             byte[] raw = new byte[length];
             int got = 0, n;
@@ -91,7 +94,7 @@ namespace FastbootStudio.Mobile.Core
             {
                 kernel = kind == CompressionKind.Gzip ? Gunzip(raw, got)
                     : kind == CompressionKind.Unknown ? raw
-                    : Compression.Decompress(raw, 0, got, kind, BootImageAnalysis.MaxUnpacked);
+                    : Compression.Decompress(raw, 0, got, kind, MaxKernel);
             }
             catch (InvalidDataException) { kernel = null; }
             if (kernel == null)
@@ -117,7 +120,7 @@ namespace FastbootStudio.Mobile.Core
                     {
                         byte[] buffer = new byte[1 << 16];
                         int n;
-                        while ((n = gz.Read(buffer, 0, buffer.Length)) > 0 && output.Length < BootImageAnalysis.MaxUnpacked)
+                        while ((n = gz.Read(buffer, 0, buffer.Length)) > 0 && output.Length < MaxKernel)
                             output.Write(buffer, 0, n);
                     }
                 }

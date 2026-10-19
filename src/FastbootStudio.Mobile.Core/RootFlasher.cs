@@ -24,6 +24,12 @@ namespace FastbootStudio.Mobile.Core
         public bool Written { get; internal set; }
         public bool Verified { get; internal set; }
 
+        /// <summary>
+        /// The write started: even when it then failed, part of the partition may be the new
+        /// image's, so the backup has to go back before the phone restarts.
+        /// </summary>
+        public bool Touched { get; internal set; }
+
         /// <summary>The backup of the partition taken before writing, to put it back.</summary>
         public string BackupFolder { get; internal set; }
 
@@ -144,6 +150,7 @@ namespace FastbootStudio.Mobile.Core
             }
 
             Step("write " + partition + " " + length + " bytes");
+            outcome.Touched = true;
             ShellResult write = shell.Run("dd if=" + Sh.Q(imagePath) + " of=" + Sh.Q(device) + " bs=4194304 conv=notrunc,fsync && sync");
             if (!write.Ok)
                 return Fail("write-failed: " + write.Error.Trim());

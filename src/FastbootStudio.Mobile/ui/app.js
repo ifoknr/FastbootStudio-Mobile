@@ -332,14 +332,16 @@ function doneBody(r) {
 }
 
 function failBody(r, stepHtml) {
-  const written = r.outcome && r.outcome.written;
+  // The partition may hold part of the new image: a write that started, or a kernel installer that changed it before failing.
+  const written = r.outcome && (r.outcome.written || r.outcome.touched || (r.kind === 'kernel' && r.outcome.changed));
   const note = r.kind === 'otg' ? t('الجوال الموصول ما زال في fastboot. تقدر تحاول مرة ثانية.', 'The connected phone is still in fastboot; you can try again.')
-    : written ? t('القسم انكتب لكن ما تطابق. لا تعيد التشغيل: رجّع النسخة القديمة الحين.', 'The partition was written but does not match. Do not restart: put the previous copy back now.')
+    : written ? (r.backup ? t('القسم ممكن تغيّر كله أو جزء منه. لا تعيد التشغيل: رجّع النسخة القديمة الحين.', 'The partition may be changed, all or part of it. Do not restart: put the previous copy back now.')
+      : t('القسم ممكن تغيّر كله أو جزء منه، وما فيه نسخة قبل التفليش. لا تعيد التشغيل: رجّع نسخة من صفحة النسخ، أو من برنامج الويندوز.', 'The partition may be changed, all or part of it, and there is no copy from before. Do not restart: put a backup back from the Backups page, or from the Windows app.'))
     : r.kind === 'backup' ? t('ما انحفظ شي ناقص.', 'Nothing half-written was kept.')
     : t('ما انكتب شي على القسم، والجوال مثل ما كان.', 'Nothing was written; the phone is as it was.');
   return `<div class="banner bad">${svg('warn')}<div class="body"><div class="big">${errText(r.error)}</div><div class="note">${note}</div></div></div>
     <div class="card"><div class="steps">${stepHtml}</div></div>
-    ${written && r.backup ? `<button class="btn primary" data-act="restoreFrom" data-v="${esc(r.backup)}" data-file="${esc(r.partition)}.img">${svg('restore')}<span>${t('رجّع النسخة القديمة', 'Put the previous copy back')}</span></button>` : ''}
+    ${written && r.backup ? `<button class="btn primary" data-act="restoreFrom" data-v="${esc(r.backup)}"${r.kind === 'image' ? ` data-file="${esc(r.partition)}.img"` : ''}>${svg('restore')}<span>${t('رجّع النسخة القديمة', 'Put the previous copy back')}</span></button>` : ''}
     <button class="btn" data-act="runClose"><span>${t('رجوع', 'Back')}</span></button>`;
 }
 
@@ -502,6 +504,14 @@ S.confirm = sh => {
       <div class="note">${t(`للمتابعة اكتب اسم القسم ${LE(typed)}:`, `To go ahead, type the partition name ${esc(typed)}:`)}</div>
       <input class="typed" data-in="typed" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${esc(typed)}">
       <div class="row2"><button class="btn" data-act="sheetClose"><span>${t('إلغاء', 'Cancel')}</span></button><button class="btn warnb" id="typedGo" data-act="${go}" disabled><span>${dev ? t('فلّش على مسؤوليتي', 'Flash at my own risk') : t('فلّش', 'Flash')}</span></button></div>`);
+  }
+  if (c.verdict === 'ok') {
+    // Even a file that checks out is written only after one more tap: no flash from a stray touch.
+    const where = ctx === 'kernel' ? t('تثبيت الكيرنل على هذا الجوال', 'Install the kernel on this phone')
+      : ctx === 'otg' ? t(`كتابة ${LE(sh.check.partition)} على الجوال الموصول`, `Write ${esc(sh.check.partition)} to the connected phone`)
+      : t(`كتابة ${LE(sh.check.partition)} على هذا الجوال`, `Write ${esc(sh.check.partition)} on this phone`);
+    return sheet('accent', `<div class="banner ok">${svg('shield')}<div class="body"><div class="big">${t('الملف مطابق ✓', 'The file checks out ✓')}</div><div class="note">${where}${ctx !== 'otg' && st.s.backupFirst ? t('، بعد نسخة احتياطية من القسم الحالي.', ', after a backup of the current partition.') : '.'}</div></div></div>
+      <div class="row2"><button class="btn" data-act="sheetClose"><span>${t('إلغاء', 'Cancel')}</span></button><button class="btn primary" data-act="${go}"><span>${t('فلّش', 'Flash')}</span></button></div>`);
   }
   return sheet('notice', `<div class="banner info">${svg('info')}<div class="body"><div class="big">${t('تنبيه خفيف', 'Worth knowing')}</div><div class="note">${t('الملف سليم، بس فيه شي مختلف عن اللي شغّال الحين. أنت تختار.', 'The file is fine, but something differs from what runs now. Your call.')}</div></div></div>
     <div class="card" style="padding:10px 14px">${checkRows(c, ctx)}</div>
@@ -764,8 +774,7 @@ const actions = {
   flash: () => {
     const c = st.f.check;
     if (!c || !c.check.canFlash) return;
-    if (c.check.verdict === 'ok') actions.doFlash(null);
-    else { st.sheet = { type: 'confirm', ctx: 'image', check: c }; render(); }
+    st.sheet = { type: 'confirm', ctx: 'image', check: c }; render();
   },
   doFlash: el => {
     const c = st.f.check, args = Object.assign({ checkId: c.checkId }, consent(el));
@@ -780,8 +789,7 @@ const actions = {
   flashKernel: () => {
     const c = st.k.check;
     if (!c || !c.check.canFlash) return;
-    if (c.check.verdict === 'ok') actions.doKernel(null);
-    else { st.sheet = { type: 'confirm', ctx: 'kernel', check: c }; render(); }
+    st.sheet = { type: 'confirm', ctx: 'kernel', check: c }; render();
   },
   doKernel: el => {
     const c = st.k.check;
@@ -871,8 +879,7 @@ const actions = {
   otgFlash: () => {
     const c = st.o.check;
     if (!c || !c.check.canFlash || c.tooBigForDownload) return;
-    if (c.check.verdict === 'ok') actions.doOtg(null);
-    else { st.sheet = { type: 'confirm', ctx: 'otg', check: c }; render(); }
+    st.sheet = { type: 'confirm', ctx: 'otg', check: c }; render();
   },
   doOtg: el => {
     const c = st.o.check;

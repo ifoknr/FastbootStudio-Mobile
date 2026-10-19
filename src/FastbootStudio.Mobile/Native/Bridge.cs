@@ -34,6 +34,7 @@ namespace FastbootStudio.Mobile.Native
         readonly Settings settings;
         readonly Otg otg;
         readonly Companion companion = new Companion(SuShell.Instance);
+        readonly Ledger ledger;
         readonly SemaphoreSlim busy = new SemaphoreSlim(1, 1);
         readonly Dictionary<string, Picked> picked = new Dictionary<string, Picked>(StringComparer.Ordinal);
         Pending pending;
@@ -47,6 +48,16 @@ namespace FastbootStudio.Mobile.Native
             this.phone = phone;
             this.settings = settings;
             this.otg = otg;
+            ledger = new Ledger(activity.FilesDir.AbsolutePath);
+        }
+
+        /// <summary>Keeps, in the app's own storage, the SHA-256s of a backup the app (or the module, from the app) just made.</summary>
+        void RecordBackup(string folder)
+        {
+            string name = folder == null ? null : Path.GetFileName(folder);
+            BackupEntry e = name == null ? null : phone.Backups().FirstOrDefault(b => b.Name == name);
+            if (e != null)
+                ledger.Record(name, e.Sums);
         }
 
         sealed class Picked
@@ -353,7 +364,7 @@ namespace FastbootStudio.Mobile.Native
                 string name = Json.Str(a, "name"), file = Json.Str(a, "file");
                 BackupFolder folder = phone.Fetch(name, file) ?? throw new BridgeError("backup-unreadable");
                 p.Path = Path.Combine(folder.Path, file);
-                p.Check = ImageCheck.FromBackup(folder, file, partition, bytes, id);
+                p.Check = ImageCheck.FromBackup(folder, file, partition, bytes, id, ledger.Get(name));
             }
             else
             {
@@ -372,9 +383,10 @@ namespace FastbootStudio.Mobile.Native
             inUse = p.Path;
             FlashOutcome o = phone.Flasher.Flash(p.Path, p.Partition, p.Check, ConsentFrom(a, settings), phone.Identity,
                 settings.BackupFirst, settings.ReadBack, line => Event("progress", new JsonObject { ["line"] = line }));
+            RecordBackup(o.BackupFolder);
             return new JsonObject
             {
-                ["partition"] = p.Partition, ["written"] = o.Written, ["verified"] = o.Verified, ["error"] = o.Error,
+                ["partition"] = p.Partition, ["written"] = o.Written, ["touched"] = o.Touched, ["verified"] = o.Verified, ["error"] = o.Error,
                 ["backup"] = o.BackupFolder == null ? null : Path.GetFileName(o.BackupFolder), ["sha256"] = p.Check.Sha256,
             };
         }
@@ -407,9 +419,10 @@ namespace FastbootStudio.Mobile.Native
             AnyKernelInstaller installer = new AnyKernelInstaller(SuShell.Instance, phone.Flasher);
             KernelOutcome o = installer.Install(p.Path, p.Zip, ConsentFrom(a, settings), phone.Identity, phone.Props.Slot,
                 settings.BackupFirst, line => Event("progress", new JsonObject { ["line"] = line }));
+            RecordBackup(o.BackupFolder);
             return new JsonObject
             {
-                ["installed"] = o.Installed, ["changed"] = o.Changed, ["error"] = o.Error,
+                ["installed"] = o.Installed, ["changed"] = o.Changed, ["ran"] = o.Ran, ["error"] = o.Error,
                 ["backup"] = o.BackupFolder == null ? null : Path.GetFileName(o.BackupFolder),
             };
         }
@@ -445,6 +458,7 @@ namespace FastbootStudio.Mobile.Native
             string folder = phone.Flasher.Backup(parts, phone.Identity, "boot", line => Event("progress", new JsonObject { ["line"] = line }));
             if (folder == null)
                 throw new BridgeError("backup-failed");
+            RecordBackup(folder);
             return new JsonObject { ["name"] = Path.GetFileName(folder) };
         }
 
@@ -454,6 +468,7 @@ namespace FastbootStudio.Mobile.Native
             if (!Json.Bool(companion.Find(), "usable"))
                 throw new BridgeError("companion-missing");
             string folder = companion.Backup(Json.Str(a, "set"), line => Event("progress", new JsonObject { ["line"] = line }));
+            RecordBackup(folder);
             return new JsonObject { ["name"] = folder };
         }
 
@@ -469,6 +484,7 @@ namespace FastbootStudio.Mobile.Native
             RequireRoot();
             if (!phone.Delete(Json.Str(a, "name")))
                 throw new BridgeError("delete-failed");
+            ledger.Forget(Json.Str(a, "name"));
             return null;
         }
 
@@ -554,7 +570,7 @@ namespace FastbootStudio.Mobile.Native
                 p.Path = Path.Combine(f.Folder, SafeName(file));
                 if (SafeName(file) != file || (!File.Exists(p.Path) && !activity.CopyTo(uri, p.Path)))
                     throw new BridgeError("read-failed");
-                p.Check = ImageCheck.FromBackup(BackupFolder.Read(f.Folder), file, partition, bytes, target.Identity);
+                p.Check = ImageCheck.FromBackup(BackupFolder.Read(f.Folder), file, partition, bytes, target.Identity, ledger.Get(f.Name));
             }
             else
             {

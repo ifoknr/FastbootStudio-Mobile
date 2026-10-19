@@ -13,6 +13,9 @@ namespace FastbootStudio.Mobile.Core
         /// <summary>True when the boot partition the zip writes is different afterwards.</summary>
         public bool Changed { get; internal set; }
 
+        /// <summary>The installer ran: when it then failed, <see cref="Changed"/> says whether it left the partition changed.</summary>
+        public bool Ran { get; internal set; }
+
         public string BackupFolder { get; internal set; }
         public string Error { get; internal set; }
 
@@ -78,11 +81,18 @@ namespace FastbootStudio.Mobile.Core
             string binary = WorkDir + "/META-INF/com/google/android/update-binary";
             ShellResult run = shell.Run("rm -rf " + Sh.Q(WorkDir) + " && mkdir -p " + Sh.Q(WorkDir) + " && cd " + Sh.Q(WorkDir)
                 + " && unzip -o -q " + Sh.Q(zipPath) + " META-INF/com/google/android/update-binary"
+                // AnyKernel3 unpacks into $AKHOME, /tmp/anykernel by default, which Android does not have.
+                + " && export AKHOME=" + Sh.Q(WorkDir + "/anykernel")
                 + " && sh " + Sh.Q(binary) + " 3 1 " + Sh.Q(zipPath) + "; code=$?; cd /; rm -rf " + Sh.Q(WorkDir) + "; exit $code");
             foreach (string line in Sh.Lines(run.Output))
                 Step(line.StartsWith("ui_print", StringComparison.Ordinal) ? line.Substring(8).Trim() : line);
+            outcome.Ran = true;
             if (!run.Ok)
+            {
+                // A failure half-way can leave the partition changed: then the backup has to go back.
+                outcome.Changed = Hash(target) != before;
                 return Fail("install-failed: " + (Sh.Lines(run.Error).LastOrDefault() ?? "exit " + run.ExitCode));
+            }
             outcome.Installed = true;
             outcome.Changed = Hash(target) != before;
             Step(outcome.Changed ? "done " + target + " changed" : "done, but " + target + " is unchanged");

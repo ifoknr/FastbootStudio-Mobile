@@ -55,6 +55,12 @@ namespace FastbootStudio.Mobile.Core
                 string line = raw.Trim();
                 if (line.Length == 0 || line.StartsWith("#", StringComparison.Ordinal))
                     continue;
+                // No installer writes a line this long: it would only hide a command (and slow every pattern down).
+                if (line.Length > MaxLine)
+                {
+                    hits.Add(new Hit("hidden", line.Substring(0, 80) + "…"));
+                    continue;
+                }
                 string reason = Writes.Any(r => r.IsMatch(line)) ? "write"
                     : Wipe.IsMatch(line) ? "wipe"
                     : Delete.IsMatch(line) ? "delete"
@@ -67,6 +73,7 @@ namespace FastbootStudio.Mobile.Core
         }
 
         public const int MaxText = 4 << 20;
+        public const int MaxLine = 8192;
 
         /// <summary>
         /// The entry as text, or null for a binary (a NUL in its first 8 KiB: busybox,

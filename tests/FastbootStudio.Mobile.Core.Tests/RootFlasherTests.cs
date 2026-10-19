@@ -174,6 +174,20 @@ namespace FastbootStudio.Mobile.Core.Tests
         }
 
         [Fact]
+        public void A_write_that_fails_half_way_is_reported_as_touched_not_untouched()
+        {
+            using FilePhone phone = new FilePhone(("vbmeta_a", 16384));
+            using Samples s = new Samples();
+            string vbmeta = s.File("vbmeta.img", Samples.Vbmeta());
+            phone.Override = script => script.StartsWith("dd if=") && script.Contains("of=") && script.Contains("conv=notrunc") ? new ShellResult(1, "", "I/O error") : null;
+            FlashOutcome outcome = phone.Flasher().Flash(vbmeta, "vbmeta_a", Checked(vbmeta, "vbmeta_a", 16384), new Consent { TypedName = "vbmeta" }, Samples.Phone);
+            Assert.StartsWith("write-failed", outcome.Error);
+            Assert.False(outcome.Written);
+            Assert.True(outcome.Touched);
+            Assert.NotNull(outcome.BackupFolder);
+        }
+
+        [Fact]
         public void A_failed_backup_stops_before_writing()
         {
             using FilePhone phone = new FilePhone(("vbmeta_a", 16384));
@@ -183,6 +197,7 @@ namespace FastbootStudio.Mobile.Core.Tests
             FlashOutcome outcome = phone.Flasher().Flash(vbmeta, "vbmeta_a", Checked(vbmeta, "vbmeta_a", 16384), new Consent { TypedName = "vbmeta" }, Samples.Phone);
             Assert.Equal("backup-failed", outcome.Error);
             Assert.False(outcome.Written);
+            Assert.False(outcome.Touched);
             Assert.False(Directory.Exists(phone.Backups) && Directory.EnumerateFileSystemEntries(phone.Backups).Any());
         }
 

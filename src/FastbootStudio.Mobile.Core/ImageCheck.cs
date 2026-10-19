@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
 using System.Linq;
 using FastbootEnhance.Core.Adb;
 using FastbootEnhance.Core.Fastboot;
@@ -19,7 +20,12 @@ namespace FastbootStudio.Mobile.Core
         /// would be written to ("init_boot_a"); <paramref name="partitionBytes"/> its size when
         /// known.
         /// </summary>
-        public static CheckResult FromBackup(BackupFolder backup, string fileName, string partition, long? partitionBytes, PhoneIdentity phone)
+        /// <param name="recorded">
+        /// The SHA-256s the app kept in its own storage when it made this backup, or null for a
+        /// backup it did not make (the Windows app's, the Companion's from before).
+        /// </param>
+        public static CheckResult FromBackup(BackupFolder backup, string fileName, string partition, long? partitionBytes, PhoneIdentity phone,
+            IReadOnlyDictionary<string, string> recorded = null)
         {
             CheckResult result = new CheckResult();
             string path = Path.Combine(backup.Path, fileName ?? "");
@@ -46,6 +52,13 @@ namespace FastbootStudio.Mobile.Core
                 result.Add(CheckLevel.Block, CheckCode.HashMismatch, expected, result.Sha256);
             else
                 result.Add(CheckLevel.Ok, CheckCode.HashMatches, result.Sha256);
+            if (recorded != null && recorded.TryGetValue(fileName, out string kept))
+            {
+                if (string.Equals(kept, result.Sha256, StringComparison.OrdinalIgnoreCase))
+                    result.Add(CheckLevel.Ok, CheckCode.RecordedMatches, result.Sha256);
+                else
+                    result.Add(CheckLevel.Block, CheckCode.BackupTampered, kept, result.Sha256);
+            }
 
             CheckContent(result, path, partition, partitionBytes, phone);
             return result;

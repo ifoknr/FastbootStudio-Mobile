@@ -57,6 +57,15 @@ namespace FastbootStudio.Mobile.Core
 
         /// <summary>The same kernel version as the phone runs.</summary>
         KernelSame,
+
+        /// <summary>The image matches the SHA-256 the app kept privately when it made the backup.</summary>
+        RecordedMatches,
+
+        /// <summary>
+        /// The image and its SHA256SUMS were both changed after the app made the backup: shared
+        /// storage can be written by other apps, the app's own record cannot.
+        /// </summary>
+        BackupTampered,
     }
 
     public sealed class CheckItem

@@ -355,3 +355,43 @@ namespace FastbootStudio.Mobile.Core.Tests
         }
     }
 }
+
+namespace FastbootStudio.Mobile.Core.Tests
+{
+    public class TamperTests
+    {
+        [Fact]
+        public void A_backup_changed_with_its_SHA256SUMS_is_caught_by_the_app_s_own_record()
+        {
+            using Samples s = new Samples();
+            byte[] original = Samples.BootImage(false);
+            BackupFolder b = s.Backup("a1b2c3d4", "Xiaomi 13T Pro", "corot_global", ("init_boot_a.img", original));
+            var recorded = new System.Collections.Generic.Dictionary<string, string> { ["init_boot_a.img"] = b.Sums["init_boot_a.img"] };
+            Assert.Contains(ImageCheck.FromBackup(b, "init_boot_a.img", "init_boot_a", 8 << 20, Samples.Phone, recorded).Items,
+                i => i.Code == CheckCode.RecordedMatches);
+
+            // Another app swaps the image and writes a matching SHA256SUMS.
+            byte[] swapped = Samples.BootImage(false);
+            swapped[swapped.Length - 1] ^= 0x5A;
+            string img = System.IO.Path.Combine(b.Path, "init_boot_a.img");
+            System.IO.File.WriteAllBytes(img, swapped);
+            System.IO.File.WriteAllText(System.IO.Path.Combine(b.Path, "SHA256SUMS"), FastbootEnhance.Core.Adb.Sha256Sums.HashFile(img) + "  init_boot_a.img\n");
+            BackupFolder reread = BackupFolder.Read(b.Path);
+            CheckResult r = ImageCheck.FromBackup(reread, "init_boot_a.img", "init_boot_a", 8 << 20, Samples.Phone, recorded);
+            Assert.Contains(r.Items, i => i.Code == CheckCode.HashMatches);
+            CheckItem t = Assert.Single(r.Items, i => i.Code == CheckCode.BackupTampered);
+            Assert.False(t.DeveloperOverride);
+            Assert.False(r.CanFlashFor(true));
+
+            // A backup the app did not make has no record: the SHA256SUMS check alone decides.
+            Assert.True(ImageCheck.FromBackup(reread, "init_boot_a.img", "init_boot_a", 8 << 20, Samples.Phone).CanFlash);
+        }
+
+        [Fact]
+        public void A_script_line_too_long_to_read_is_refused()
+        {
+            ScriptScan.Hit hit = Assert.Single(ScriptScan.Scan("echo " + new string('a', 9000) + "; rm -rf /data\n"));
+            Assert.Equal("hidden", hit.Reason);
+        }
+    }
+}
