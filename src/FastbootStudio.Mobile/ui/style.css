@@ -7,6 +7,7 @@
 @font-face { font-family: Kufi; src: url(fonts/NotoKufiArabic-SemiBold.ttf); font-weight: 600; }
 @font-face { font-family: Kufi; src: url(fonts/NotoKufiArabic-Bold.ttf); font-weight: 700; }
 
+/* Spacing by margins where an older WebView (Chrome < 84) has no flex gap. */
 /* The Windows app's palettes (Themes/Palette.Dark.xaml and Palette.Light.xaml). */
 :root {
   --bg:#0E1116; --rail:#0A0D12; --well:#11151C; --surface:#161A21; --raised:#1D222B; --line:#2A313C;
@@ -52,17 +53,17 @@ main > * { flex: none; }
 [dir=rtl] .rows .v { text-align: right; }
 .rows .v.ar { font-family: Kufi, Roboto, sans-serif; font-size: 13px; direction: rtl; }
 .note { font-size: 12px; color: var(--dim); }
-.check { display: flex; gap: 9px; align-items: flex-start; font-size: 13px; padding: 4px 0; }
-.dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 7px; flex: none; background: var(--faint); }
+.check { display: flex; align-items: flex-start; font-size: 13px; padding: 4px 0; }
+.dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 7px; margin-inline-end: 9px; flex: none; background: var(--faint); }
 .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--danger); } .dot.info { background: var(--notice); }
-.btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 46px; padding: 6px 12px; border-radius: 12px; font-weight: 600; font-size: 14.5px; border: 1px solid var(--line); background: var(--raised); color: var(--text); text-align: center; }
+.btn { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 46px; padding: 6px 12px; border-radius: 12px; font-weight: 600; font-size: 14.5px; border: 1px solid var(--line); background: var(--raised); color: var(--text); text-align: center; }
 .btn.sm { min-height: 38px; font-size: 13px; }
 .btn.primary { background: var(--accent); color: var(--ink); border-color: var(--accent); }
 .btn.danger { background: var(--dsoft); color: var(--danger); border-color: var(--dline); }
 .btn.warnb { background: var(--wsoft); color: var(--warn); border-color: var(--wline); }
 .btn.noticeb { background: var(--nsoft); color: var(--notice); border-color: var(--nline); }
 .btn:disabled, .btn.off { opacity: .4; }
-.btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.btn svg { margin-inline-end: 8px; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
 .seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; background: var(--well); border: 1px solid var(--line); border-radius: 11px; padding: 3px; gap: 3px; }

@@ -45,7 +45,6 @@ namespace FastbootStudio.Mobile
         {
             base.OnCreate(savedInstanceState);
             Settings settings = new Settings(this);
-            Bars(settings.Theme == "light" ? false : settings.Theme == "dark" || SystemDark);
             otg = new Otg(this);
             bridge = new Bridge(this, new Phone(this), settings, otg);
 
@@ -65,6 +64,8 @@ namespace FastbootStudio.Mobile
             web.SetWebChromeClient(new Chrome());
             web.AddJavascriptInterface(bridge, "fbsNative");
             SetContentView(web);
+            // After SetContentView: the window has no decor view (nor insets controller) before it.
+            Bars(settings.Theme == "light" ? false : settings.Theme == "dark" || SystemDark);
             web.LoadUrl(Page);
 
             receiver = new UsbReceiver(this);
