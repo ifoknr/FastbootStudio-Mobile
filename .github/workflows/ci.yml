@@ -32,6 +32,9 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
+      # The runner's newest SDK refuses net8.0-android: this job builds with the .NET 8 SDK.
+      - name: use the .NET 8 SDK
+        run: dotnet new globaljson --sdk-version "$(dotnet --list-sdks | grep '^8\.' | tail -1 | cut -d' ' -f1)" --roll-forward latestPatch && dotnet --version
       - run: dotnet workload install android
       # The same signing key from run to run, so a newer test APK installs over the last one.
       - uses: actions/cache@v4
