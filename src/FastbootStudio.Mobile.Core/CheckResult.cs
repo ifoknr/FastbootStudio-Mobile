@@ -45,6 +45,9 @@ namespace FastbootStudio.Mobile.Core
         DeviceCheckOff,
         AndroidSupported,
         AndroidNotSupported,
+
+        /// <summary>A script in the zip writes a partition no kernel needs, wipes storage, deletes data or uses the network.</summary>
+        DangerousScript,
     }
 
     public sealed class CheckItem

@@ -11,12 +11,13 @@
     <ApplicationVersion>1</ApplicationVersion>
     <ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
-    <RuntimeIdentifiers>android-arm64;android-arm</RuntimeIdentifiers>
+    <!-- Phones; a test build for the x86_64 emulator passes -p:FbsRids=android-x64. -->
+    <FbsRids Condition="'$(FbsRids)' == ''">android-arm64;android-arm</FbsRids>
+    <RuntimeIdentifiers>$(FbsRids)</RuntimeIdentifiers>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\FastbootStudio.Mobile.Core\FastbootStudio.Mobile.Core.csproj" />
-    <Reference Include="Mono.Android.Export" />
   </ItemGroup>
 
   <ItemGroup>

@@ -67,6 +67,8 @@ namespace FastbootStudio.Mobile.Core
                     }
                     using (StreamReader reader = new StreamReader(scriptEntry.Open()))
                         script = reader.ReadToEnd();
+                    if (!ScanScripts(archive, result))
+                        return zip;
                 }
             }
             catch (InvalidDataException)
@@ -86,6 +88,60 @@ namespace FastbootStudio.Mobile.Core
             if (string.IsNullOrEmpty((expectedSha256 ?? "").Trim()))
                 result.Add(CheckLevel.Notice, CheckCode.NoFingerprint, Path.GetFileName(zipPath));
             return zip;
+        }
+
+        /// <summary>
+        /// The installer runs as root, so its scripts are read before anything runs: a binary
+        /// installer cannot be read and is refused, and so is a script that does what no kernel
+        /// installer does (<see cref="ScriptScan"/>). Never overridable.
+        /// </summary>
+        static bool ScanScripts(ZipArchive archive, CheckResult result)
+        {
+            ZipArchiveEntry installer = archive.GetEntry(Installer);
+            using (Stream s = installer.Open())
+            {
+                byte[] head = new byte[4];
+                int n = s.Read(head, 0, 4);
+                if (n == 4 && head[0] == 0x7F && head[1] == (byte)'E' && head[2] == (byte)'L' && head[3] == (byte)'F')
+                {
+                    result.Add(CheckLevel.Block, CheckCode.DangerousScript, "binary", Installer, "");
+                    return false;
+                }
+            }
+            bool clean = true;
+            List<string> texts = new List<string>();
+            HashSet<string> binaries = new HashSet<string>(StringComparer.Ordinal);
+            // Every text file, not only *.sh: anykernel.sh can source any file it carries.
+            foreach (ZipArchiveEntry entry in archive.Entries.Where(e => e.Length > 0 && !e.FullName.EndsWith("/", StringComparison.Ordinal)))
+            {
+                bool script = ScriptScan.IsScript(entry.FullName);
+                string text = ScriptScan.ReadText(entry.Open(), entry.Length, script, out bool tooBig);
+                if (tooBig && script)
+                {
+                    result.Add(CheckLevel.Block, CheckCode.DangerousScript, "too-big", entry.FullName, "");
+                    clean = false;
+                    continue;
+                }
+                if (text == null)
+                {
+                    binaries.Add(entry.Name);
+                    continue;
+                }
+                texts.Add(text);
+                foreach (ScriptScan.Hit hit in ScriptScan.Scan(text).Take(3))
+                {
+                    result.Add(CheckLevel.Block, CheckCode.DangerousScript, hit.Reason, entry.FullName, hit.Line);
+                    clean = false;
+                }
+            }
+            // A script that runs a file which could not be read as text hides what it does.
+            foreach (string text in texts)
+                foreach (string line in ScriptScan.Sourced(text).Where(binaries.Contains).Take(1))
+                {
+                    result.Add(CheckLevel.Block, CheckCode.DangerousScript, "hidden", line, "");
+                    clean = false;
+                }
+            return clean;
         }
 
         /// <summary>Entries stay inside the folder the zip is unpacked to: no "..", no absolute paths.</summary>

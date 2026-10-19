@@ -16,3 +16,40 @@ jobs:
         with:
           dotnet-version: 8.0.x
       - run: dotnet test tests/FastbootStudio.Mobile.Core.Tests -c Release
+
+  apk:
+    # A test APK to install by hand. Nothing is released or tagged here.
+    name: test APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: dotnet workload install android
+      # The same signing key from run to run, so a newer test APK installs over the last one.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.local/share/Xamarin/Mono for Android/debug.keystore
+          key: fbs-mobile-test-keystore
+      - name: build
+        run: >
+          dotnet build src/FastbootStudio.Mobile/FastbootStudio.Mobile.csproj -c Release
+          -p:AndroidSdkDirectory="$ANDROID_HOME" -p:JavaSdkDirectory="$JAVA_HOME"
+          -p:AcceptAndroidSDKLicenses=true
+      - name: name the APK
+        run: |
+          mkdir out
+          cp src/FastbootStudio.Mobile/bin/Release/net8.0-android/*-Signed.apk "out/FastbootStudio-Mobile-test-${GITHUB_SHA::7}.apk"
+          sha256sum out/*.apk | tee out/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FastbootStudio-Mobile-test-apk
+          path: out/
+          retention-days: 30
