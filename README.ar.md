@@ -39,6 +39,15 @@
 3. افتحه. لو عندك روت (Magisk أو KernelSU أو APatch)، وافق لما يطلب مدير الروت الصلاحية؛ هي اللي تخلي التطبيق يقرا ويكتب الأقسام والنسخ الاحتياطية.
    بدون روت تشتغل صفحة الجهاز والـ OTG.
 
+**التحديثات من [Obtainium](https://github.com/ImranR98/Obtainium):** اضغط الزر من جوالك، و Obtainium يضيف التطبيق والبيتا مفعّلة، وبعدها يثبّت كل نسخة جديدة من الإصدارات هنا على طول.
+أو ضيف `https://github.com/ifoknr/FastbootStudio-Mobile` بنفسك، وشغّل *Include prereleases* ما دام التطبيق بيتا.
+
+</div>
+
+<p align="center"><a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.ifoknr.fastbootstudio.mobile%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Fifoknr%2FFastbootStudio-Mobile%22%2C%22author%22%3A%22IFOKNR%22%2C%22name%22%3A%22Fastboot%20Studio%20Mobile%22%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3Atrue%7D%22%7D"><img src="docs/badge_obtainium.png" alt="Get it on Obtainium" height="48"></a></p>
+
+<div dir="rtl">
+
 يحتاج أندرويد 8 أو أحدث، معالج arm64 أو arm. في الإعدادات خيار *التحقق من التحديثات* (مرة باليوم، أو يدوي).
 
 <a id="الصفحات"></a>
@@ -131,6 +140,7 @@ dotnet build src/FastbootStudio.Mobile -c Release \
 - تطوير وصيانة **IFOKNR** — تيليجرام [@IFOKNR1](https://t.me/IFOKNR1) · GitHub [ifoknr](https://github.com/ifoknr)
 - مبني على مكتبة Fastboot Studio Core (`external/FastbootStudio`)، المبنية على [Fastboot Enhance](https://github.com/libxzr/FastbootEnhance) للمطوّر LibXZR
 - الخطوط: Roboto و Noto Kufi Arabic (رخصة SIL Open Font)
+- زر *Get it on Obtainium* من مشروع [Obtainium](https://github.com/ImranR98/Obtainium)
 
 منشور برخصة [MIT](LICENSE).
 
