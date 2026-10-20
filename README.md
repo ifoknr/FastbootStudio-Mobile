@@ -37,6 +37,13 @@ SHA-256 still matches.
    that is what lets the app read and write partitions and backups. Without root, the
    Device page and OTG still work.
 
+**Updates with [Obtainium](https://github.com/ImranR98/Obtainium):** tap the badge on your phone and
+Obtainium adds the app with betas turned on, then installs each new version straight from these
+releases. Or add `https://github.com/ifoknr/FastbootStudio-Mobile` by hand and turn on
+*Include prereleases* while the app is in beta.
+
+<a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.ifoknr.fastbootstudio.mobile%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Fifoknr%2FFastbootStudio-Mobile%22%2C%22author%22%3A%22IFOKNR%22%2C%22name%22%3A%22Fastboot%20Studio%20Mobile%22%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3Atrue%7D%22%7D"><img src="docs/badge_obtainium.png" alt="Get it on Obtainium" height="48"></a>
+
 Android 8 or newer, arm64 or arm. Settings has *Check for updates* (once a day, or by hand).
 
 <a id="pages"></a>
@@ -151,5 +158,6 @@ are built and signed by `.github/workflows/release.yml`. The pages alone open in
 - Built on the Fastboot Studio Core library (`external/FastbootStudio`), which is based on
   [Fastboot Enhance](https://github.com/libxzr/FastbootEnhance) by LibXZR
 - Fonts: Roboto and Noto Kufi Arabic (SIL Open Font License)
+- The *Get it on Obtainium* badge is from [Obtainium](https://github.com/ImranR98/Obtainium)
 
 Released under the [MIT License](LICENSE).
