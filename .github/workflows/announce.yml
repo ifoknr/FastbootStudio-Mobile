@@ -1,0 +1,77 @@
+name: Announce
+
+# Posts an announcement from announcements/<folder> to Telegram through the bot: its images
+# as an album (caption.html on the first), then message.html with buttons to the site and the
+# tools library. Without "send" it only checks the secrets and names the chat it would post to.
+# Secrets: TELEGRAM_TOKEN, TELEGRAM_TO, and TELEGRAM_TOPIC for a group with topics.
+on:
+  workflow_dispatch:
+    inputs:
+      folder:
+        description: "Folder under announcements/"
+        required: true
+        default: "2026-10-site"
+      send:
+        description: "Post it (off: only check where it would go)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  announce:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Post
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+          TELEGRAM_TOPIC: ${{ secrets.TELEGRAM_TOPIC }}
+          FOLDER: announcements/${{ inputs.folder }}
+          SEND: ${{ inputs.send }}
+        run: |
+          set -euo pipefail
+          case "$FOLDER" in *..*) echo "::error::Bad folder"; exit 1 ;; esac
+          test -f "$FOLDER/message.html" || { echo "::error::$FOLDER/message.html is missing"; exit 1; }
+          if [ -z "$TELEGRAM_TOKEN" ] || [ -z "$TELEGRAM_TO" ]; then
+            echo "::error::Add the secrets TELEGRAM_TOKEN and TELEGRAM_TO (and TELEGRAM_TOPIC for a topic) to this repository."
+            exit 1
+          fi
+          api="https://api.telegram.org/bot$TELEGRAM_TOKEN"
+          me=$(curl -sS "$api/getMe")
+          [ "$(jq -r .ok <<< "$me")" = true ] || { echo "::error::The token is not accepted: $(jq -r .description <<< "$me")"; exit 1; }
+          chat=$(curl -sS "$api/getChat" --data-urlencode "chat_id=$TELEGRAM_TO")
+          [ "$(jq -r .ok <<< "$chat")" = true ] || { echo "::error::The chat is not reachable: $(jq -r .description <<< "$chat")"; exit 1; }
+          echo "bot: @$(jq -r .result.username <<< "$me")"
+          echo "chat: $(jq -r '.result.title // .result.username' <<< "$chat") ($(jq -r .result.type <<< "$chat"))${TELEGRAM_TOPIC:+, topic $TELEGRAM_TOPIC}"
+          mapfile -t photos < <(find "$FOLDER" -maxdepth 1 -type f \( -name '*.jpg' -o -name '*.png' \) | sort)
+          echo "photos: ${#photos[@]}"
+          if [ "$SEND" != true ]; then
+            echo "Check only: nothing was posted."
+            exit 0
+          fi
+
+          thread=()
+          [ -n "${TELEGRAM_TOPIC:-}" ] && thread=(--form-string "message_thread_id=$TELEGRAM_TOPIC")
+          if [ "${#photos[@]}" -gt 0 ]; then
+            caption=$(cat "$FOLDER/caption.html" 2>/dev/null || true)
+            media="[]"; files=()
+            for i in "${!photos[@]}"; do
+              item=$(jq -n --arg m "attach://p$i" '{type:"photo",media:$m}')
+              if [ "$i" = 0 ] && [ -n "$caption" ]; then
+                item=$(jq --arg c "$caption" '. + {caption:$c, parse_mode:"HTML"}' <<< "$item")
+              fi
+              media=$(jq --argjson it "$item" '. + [$it]' <<< "$media")
+              files+=(-F "p$i=@${photos[$i]}")
+            done
+            out=$(curl -sS "$api/sendMediaGroup" --form-string "chat_id=$TELEGRAM_TO" "${thread[@]}" --form-string "media=$media" "${files[@]}")
+            [ "$(jq -r .ok <<< "$out")" = true ] || { echo "::error::The photos were not posted: $(jq -r .description <<< "$out")"; exit 1; }
+          fi
+          keyboard='{"inline_keyboard":[[{"text":"📚 المكتبة · Library","url":"https://ifoknr.com/app/"},{"text":"🌐 ifoknr.com","url":"https://ifoknr.com"}]]}'
+          out=$(curl -sS "$api/sendMessage" --form-string "chat_id=$TELEGRAM_TO" "${thread[@]}" --form-string parse_mode=HTML \
+            --form-string disable_web_page_preview=true --form-string "reply_markup=$keyboard" --form-string "text=$(cat "$FOLDER/message.html")")
+          [ "$(jq -r .ok <<< "$out")" = true ] || { echo "::error::The message was not posted: $(jq -r .description <<< "$out")"; exit 1; }
+          echo "Posted."
