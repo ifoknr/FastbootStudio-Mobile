@@ -4,7 +4,7 @@
 
 (function () {
   const q = new URLSearchParams(location.search);
-  const settings = { theme: q.get('theme') || 'dark', lang: q.get('lang') || 'ar', dev: q.get('dev') === '1', backupFirst: true, readBack: true, minBattery: 50, autoUpdate: true };
+  const settings = { theme: q.get('theme') || 'dark', lang: q.get('lang') || 'ar', dev: q.get('dev') === '1', backupFirst: true, readBack: true, minBattery: 50, autoUpdate: true, textSize: q.get('size') || 'm' };
   const root = q.get('root') !== '0';
   const sha = (s) => { let h = 0x811c9dc5; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0; return (h.toString(16).padStart(8, '0').repeat(8)); };
   const phone = {
