@@ -10,7 +10,8 @@ commit messages or pull request descriptions. The GitHub tool appends a "Generat
 line to new pull requests; remove it with an update right after creating one.
 
 ## Releases
-The first public version is the beta v1.0.0-beta.1 (Oct 19, 2026), built and signed by
+The first public version was the beta v1.0.0-beta.1 (Oct 19, 2026); the first stable one is
+v1.0.0 (Oct 28, 2026). Both are built and signed by
 `.github/workflows/release.yml` with the release key in the repository secrets. A version with a
 dash is a pre-release. IFOKNR tests on his phones first: make a new release or tag only when he
 says so.

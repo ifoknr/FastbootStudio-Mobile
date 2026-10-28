@@ -15,8 +15,8 @@
   <img alt="Android 8+" src="https://img.shields.io/badge/Android-8%2B-0E1116?style=flat-square&labelColor=1D222B">
   <img alt="Magisk | KernelSU | APatch" src="https://img.shields.io/badge/root-Magisk%20%7C%20KernelSU%20%7C%20APatch-0E1116?style=flat-square&labelColor=1D222B">
   <img alt="Languages" src="https://img.shields.io/badge/UI-English%20%7C%20%D8%A7%D9%84%D8%B9%D8%B1%D8%A8%D9%8A%D8%A9-0E1116?style=flat-square&labelColor=1D222B">
-  <a href="https://github.com/ifoknr/FastbootStudio-Mobile/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/ifoknr/FastbootStudio-Mobile?include_prereleases&style=flat-square&labelColor=1D222B&color=2DD4BF&label=release"></a>
-  <img alt="Beta" src="https://img.shields.io/badge/status-beta-0E1116?style=flat-square&labelColor=1D222B&color=F5C451">
+  <a href="https://github.com/ifoknr/FastbootStudio-Mobile/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/ifoknr/FastbootStudio-Mobile?style=flat-square&labelColor=1D222B&color=2DD4BF&label=release"></a>
+  <img alt="Stable" src="https://img.shields.io/badge/status-stable-0E1116?style=flat-square&labelColor=1D222B&color=2DD4BF">
   <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-0E1116?style=flat-square&labelColor=1D222B">
   <a href="https://t.me/BeNeXTBrO"><img alt="Telegram group" src="https://img.shields.io/badge/Telegram-group-0E1116?style=flat-square&labelColor=1D222B&color=229ED9"></a>
 </p>
@@ -27,24 +27,24 @@
 فلّش صورة boot أو ملف كيرنل بدون كمبيوتر، رجّع نسخة احتياطية بضغطتين، أو أنقذ جوال ثاني بكيبل USB.
 والتطبيق يفحص كل ملف قبل الكتابة: من أي جوال جاء، وش نوع الصورة، وش الكيرنل اللي فيه، وهل بصمة SHA-256 حقته لسا مطابقة.
 
-> 🧪 **بيتا.** أول إصدار للعامة. انجرّب على جوالات حقيقية، لكن خلّ عندك نسخة احتياطية و[بلّغنا](#مساعدة) عن أي شي غريب.
-> نسخة البيتا يوصلها البيتا الجاي والإصدار الرسمي كتحديث.
+> ✅ **v1.0.0، أول نسخة رسمية.** انجرّبت على جوالات حقيقية. ومع كذا خلّ عندك نسخة احتياطية، و[بلّغنا](#مساعدة) عن أي شي غريب.
+> إذا عندك البيتا، التطبيق يعرض لك هالنسخة كتحديث.
 
 <a id="تثبيت"></a>
 ## التثبيت
 
 1. حمّل `FastbootStudio-Mobile-vX.Y.Z.apk` من [الإصدارات](https://github.com/ifoknr/FastbootStudio-Mobile/releases)
-   (البيتا تحت *Pre-release*). بصمة SHA-256 موجودة في ملاحظات الإصدار وفي `SHA256SUMS`.
+   بصمة SHA-256 موجودة في ملاحظات الإصدار وفي `SHA256SUMS`.
 2. ثبّته. أندرويد يطلب مرة وحدة تسمح بالتثبيت من المتصفح أو مدير الملفات.
 3. افتحه. لو عندك روت (Magisk أو KernelSU أو APatch)، وافق لما يطلب مدير الروت الصلاحية؛ هي اللي تخلي التطبيق يقرا ويكتب الأقسام والنسخ الاحتياطية.
    بدون روت تشتغل صفحة الجهاز والـ OTG.
 
-**التحديثات من [Obtainium](https://github.com/ImranR98/Obtainium):** اضغط الزر من جوالك، و Obtainium يضيف التطبيق والبيتا مفعّلة، وبعدها يثبّت كل نسخة جديدة من الإصدارات هنا على طول.
-أو ضيف `https://github.com/ifoknr/FastbootStudio-Mobile` بنفسك، وشغّل *Include prereleases* ما دام التطبيق بيتا.
+**التحديثات من [Obtainium](https://github.com/ImranR98/Obtainium):** اضغط الزر من جوالك، و Obtainium يضيف التطبيق، وبعدها يثبّت كل نسخة جديدة من الإصدارات هنا على طول.
+أو ضيف `https://github.com/ifoknr/FastbootStudio-Mobile` بنفسك.
 
 </div>
 
-<p align="center"><a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.ifoknr.fastbootstudio.mobile%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Fifoknr%2FFastbootStudio-Mobile%22%2C%22author%22%3A%22IFOKNR%22%2C%22name%22%3A%22Fastboot%20Studio%20Mobile%22%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3Atrue%7D%22%7D"><img src="docs/badge_obtainium.png" alt="Get it on Obtainium" height="48"></a></p>
+<p align="center"><a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.ifoknr.fastbootstudio.mobile%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Fifoknr%2FFastbootStudio-Mobile%22%2C%22author%22%3A%22IFOKNR%22%2C%22name%22%3A%22Fastboot%20Studio%20Mobile%22%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3Afalse%7D%22%7D"><img src="docs/badge_obtainium.png" alt="Get it on Obtainium" height="48"></a></p>
 
 <div dir="rtl">
 

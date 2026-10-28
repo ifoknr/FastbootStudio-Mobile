@@ -11,8 +11,8 @@
   <img alt="Android 8+" src="https://img.shields.io/badge/Android-8%2B-0E1116?style=flat-square&labelColor=1D222B">
   <img alt="Magisk | KernelSU | APatch" src="https://img.shields.io/badge/root-Magisk%20%7C%20KernelSU%20%7C%20APatch-0E1116?style=flat-square&labelColor=1D222B">
   <img alt="Languages" src="https://img.shields.io/badge/UI-English%20%7C%20%D8%A7%D9%84%D8%B9%D8%B1%D8%A8%D9%8A%D8%A9-0E1116?style=flat-square&labelColor=1D222B">
-  <a href="https://github.com/ifoknr/FastbootStudio-Mobile/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/ifoknr/FastbootStudio-Mobile?include_prereleases&style=flat-square&labelColor=1D222B&color=2DD4BF&label=release"></a>
-  <img alt="Beta" src="https://img.shields.io/badge/status-beta-0E1116?style=flat-square&labelColor=1D222B&color=F5C451">
+  <a href="https://github.com/ifoknr/FastbootStudio-Mobile/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/ifoknr/FastbootStudio-Mobile?style=flat-square&labelColor=1D222B&color=2DD4BF&label=release"></a>
+  <img alt="Stable" src="https://img.shields.io/badge/status-stable-0E1116?style=flat-square&labelColor=1D222B&color=2DD4BF">
   <img alt="License MIT" src="https://img.shields.io/badge/license-MIT-0E1116?style=flat-square&labelColor=1D222B">
   <a href="https://t.me/BeNeXTBrO"><img alt="Telegram group" src="https://img.shields.io/badge/Telegram-group-0E1116?style=flat-square&labelColor=1D222B&color=229ED9"></a>
 </p>
@@ -23,26 +23,25 @@ two taps, or rescue another phone over a USB cable, and let the app check every 
 which phone it came from, what kind of image it is, which kernel it carries and whether its
 SHA-256 still matches.
 
-> 🧪 **Beta.** The first public version. It has been tested on real phones, but please keep a
-> backup and [tell us](#help) about anything that looks wrong. A beta gets the next betas and
-> the stable release as updates.
+> ✅ **v1.0.0, the first stable version.** Tested on real phones. Keep a backup anyway, and
+> [tell us](#help) about anything that looks wrong. If you have the beta, the app offers you this
+> version as an update.
 
 <a id="install"></a>
 ## Install
 
 1. Download `FastbootStudio-Mobile-vX.Y.Z.apk` from [Releases](https://github.com/ifoknr/FastbootStudio-Mobile/releases)
-   (betas are under *Pre-release*). Its SHA-256 is in the release notes and in `SHA256SUMS`.
+   Its SHA-256 is in the release notes and in `SHA256SUMS`.
 2. Install it. Android asks to allow installs from your browser or file manager once.
 3. Open it. With root (Magisk, KernelSU or APatch), grant access when the root manager asks;
    that is what lets the app read and write partitions and backups. Without root, the
    Device page and OTG still work.
 
 **Updates with [Obtainium](https://github.com/ImranR98/Obtainium):** tap the badge on your phone and
-Obtainium adds the app with betas turned on, then installs each new version straight from these
-releases. Or add `https://github.com/ifoknr/FastbootStudio-Mobile` by hand and turn on
-*Include prereleases* while the app is in beta.
+Obtainium adds the app, then installs each new version straight from these releases. Or add
+`https://github.com/ifoknr/FastbootStudio-Mobile` by hand.
 
-<a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.ifoknr.fastbootstudio.mobile%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Fifoknr%2FFastbootStudio-Mobile%22%2C%22author%22%3A%22IFOKNR%22%2C%22name%22%3A%22Fastboot%20Studio%20Mobile%22%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3Atrue%7D%22%7D"><img src="docs/badge_obtainium.png" alt="Get it on Obtainium" height="48"></a>
+<a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22com.ifoknr.fastbootstudio.mobile%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2Fifoknr%2FFastbootStudio-Mobile%22%2C%22author%22%3A%22IFOKNR%22%2C%22name%22%3A%22Fastboot%20Studio%20Mobile%22%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3Afalse%7D%22%7D"><img src="docs/badge_obtainium.png" alt="Get it on Obtainium" height="48"></a>
 
 Android 8 or newer, arm64 or arm. Settings has *Check for updates* (once a day, or by hand).
 
