@@ -473,6 +473,7 @@ P.logs = () => {
 
 P.about = () => head(t('حول', 'About'), 'Fastboot Studio Mobile', '', true) + `<main>
   <div class="card" style="text-align:center"><div class="big-ok"><img src="icon.png" alt="" style="width:72px;height:72px;border-radius:18px"><h3>Fastboot Studio Mobile</h3><div class="note ltr">v${esc(st.version)} · MIT</div></div>
+    <div class="sig-row"><img class="sig sig-dark" src="ifoknr-dark.svg" alt="IFOKNR"><img class="sig sig-light" src="ifoknr-light.svg" alt="IFOKNR"></div>
     <div class="note">${t('تطوير IFOKNR. مبني على مكتبة Fastboot Studio، المبنية على Fastboot Enhance من LibXZR.', 'By IFOKNR. Built on the Fastboot Studio library, which is based on Fastboot Enhance by LibXZR.')}</div></div>
   <div class="card list">
     ${[['https://t.me/IFOKNR1', 'tg', t('تواصل', 'Contact'), '@IFOKNR1'], ['https://github.com/ifoknr', 'gh', 'GitHub', 'ifoknr'], ['https://github.com/ifoknr/FastbootStudio', 'pc', 'Fastboot Studio (Windows)', 'github.com/ifoknr/FastbootStudio']].map(([u, i, b, s]) => `<button class="it" data-act="link" data-v="${u}"><div class="ic">${svg(i)}</div><div><b>${b}</b><small class="ltr">${s}</small></div><span class="chev">${A ? '‹' : '›'}</span></button>`).join('')}

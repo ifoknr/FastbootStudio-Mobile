@@ -180,3 +180,9 @@ ol.how { padding-inline-start: 18px; font-size: 13px; color: var(--dim); display
 .toast { position: absolute; left: 16px; right: 16px; bottom: 84px; background: var(--raised); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; font-size: 13px; z-index: 9; box-shadow: 0 6px 24px rgba(0,0,0,.3); }
 .link { color: var(--accent); font-weight: 500; }
 .files { display: flex; flex-direction: column; gap: 6px; }
+
+/* IFOKNR in the Swamp Ninja lettering, as outlines; one picture per theme. */
+.sig-row { display: flex; justify-content: center; margin: 2px 0 8px; }
+.sig { height: 26px; width: auto; }
+.sig-light, :root[data-theme=light] .sig-dark { display: none; }
+:root[data-theme=light] .sig-light { display: block; }
