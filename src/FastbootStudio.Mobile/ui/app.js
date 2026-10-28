@@ -80,6 +80,8 @@ const st = {
 
 const head = (title, sub, chip, back) => `<header>${back ? `<button class="back" data-act="back">${A ? '›' : '‹'}</button>` : '<img src="icon-themed.png" alt="">'}
 <div class="t"><h1>${title}</h1><p>${sub || ''}</p></div>${chip || ''}</header>`;
+// The app name in the Prixma lettering (outlines), for a header's second line.
+const appName = '<img class="an an-dark" src="appname-dark.svg" alt="Fastboot Studio Mobile"><img class="an an-light" src="appname-light.svg" alt="Fastboot Studio Mobile">';
 const rows = r => `<div class="rows">${r.filter(Boolean).map(([k, v, ar]) => `<div class="k">${k}</div><div class="v${ar ? ' ar' : ''}">${v}</div>`).join('')}</div>`;
 const fileCard = (icon, name, meta, side, act) => `<button class="file"${act ? ` data-act="${act}"` : ''}><div class="ico">${svg(icon)}</div><div style="flex:1;min-width:0"><div class="n">${esc(name)}</div><div class="m">${meta}</div></div>${side || ''}</button>`;
 const vrow = (kind, mark, text, small, extra) => `<div class="vrow"><span class="i ${kind}">${mark}</span><div>${text}${small ? `<small>${small}</small>` : ''}${extra || ''}</div></div>`;
@@ -439,7 +441,7 @@ P.more = () => {
     ['link:https://t.me/BeNeXTBrO', 'tg', t('قروب التيليجرام', 'Telegram group'), L('@BeNeXTBrO')],
     ['link:https://github.com/ifoknr', 'gh', t('السورس', 'Source'), L('github.com/ifoknr')],
     ['about', 'about', t('حول', 'About'), L('v' + esc(st.version))]];
-  return head(t('المزيد', 'More'), 'Fastboot Studio Mobile') + `<main><div class="card list">
+  return head(t('المزيد', 'More'), appName) + `<main><div class="card list">
     ${items.map(([to, i, b, s]) => `<button class="it" data-act="${to.startsWith('link:') ? 'link' : 'page'}" data-v="${to.replace(/^link:/, '')}"><div class="ic">${svg(i)}</div><div><b>${b}</b><small>${s}</small></div><span class="chev">${A ? '‹' : '›'}</span></button>`).join('')}
   </div></main>` + nav();
 };
@@ -479,7 +481,7 @@ P.logs = () => {
     <button class="btn sm" data-act="logs">${svg('refresh')}<span>${t('تحديث', 'Refresh')}</span></button></main>` + nav();
 };
 
-P.about = () => head(t('حول', 'About'), 'Fastboot Studio Mobile', '', true) + `<main>
+P.about = () => head(t('حول', 'About'), appName, '', true) + `<main>
   <div class="hero"><div class="cookie"><img src="icon-themed.png" alt=""></div>
     <h3 class="appname"><img class="an an-dark" src="appname-dark.svg" alt="Fastboot Studio Mobile"><img class="an an-light" src="appname-light.svg" alt="Fastboot Studio Mobile"></h3>
     <div class="tag">${t('فلّش وخذ نسخة وروّت جوالك من الجوال نفسه، بأمان.', 'Flash, back up and root from the phone itself, safely.')}</div>
