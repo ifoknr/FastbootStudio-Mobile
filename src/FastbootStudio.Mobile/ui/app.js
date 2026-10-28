@@ -472,7 +472,7 @@ P.logs = () => {
 };
 
 P.about = () => head(t('حول', 'About'), 'Fastboot Studio Mobile', '', true) + `<main>
-  <div class="card" style="text-align:center"><div class="big-ok"><img src="icon.png" alt="" style="width:72px;height:72px;border-radius:18px"><h3>Fastboot Studio Mobile</h3><div class="note ltr">v${esc(st.version)} · MIT</div></div>
+  <div class="card" style="text-align:center"><div class="big-ok"><img src="icon.png" alt="" style="width:72px;height:72px;border-radius:18px"><h3 class="appname"><img class="an an-dark" src="appname-dark.svg" alt="Fastboot Studio Mobile"><img class="an an-light" src="appname-light.svg" alt="Fastboot Studio Mobile"></h3><div class="note ltr">v${esc(st.version)} · MIT</div></div>
     <div class="sig-row"><img class="sig sig-dark" src="ifoknr-dark.svg" alt="IFOKNR"><img class="sig sig-light" src="ifoknr-light.svg" alt="IFOKNR"></div>
     <div class="note">${t('تطوير IFOKNR. مبني على مكتبة Fastboot Studio، المبنية على Fastboot Enhance من LibXZR.', 'By IFOKNR. Built on the Fastboot Studio library, which is based on Fastboot Enhance by LibXZR.')}</div></div>
   <div class="card list">
