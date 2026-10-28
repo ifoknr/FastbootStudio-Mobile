@@ -78,7 +78,7 @@ const st = {
 
 // ---------------------------------------------------------------- small parts
 
-const head = (title, sub, chip, back) => `<header>${back ? `<button class="back" data-act="back">${A ? '›' : '‹'}</button>` : '<img src="icon.png" alt="">'}
+const head = (title, sub, chip, back) => `<header>${back ? `<button class="back" data-act="back">${A ? '›' : '‹'}</button>` : '<img src="icon-themed.png" alt="">'}
 <div class="t"><h1>${title}</h1><p>${sub || ''}</p></div>${chip || ''}</header>`;
 const rows = r => `<div class="rows">${r.filter(Boolean).map(([k, v, ar]) => `<div class="k">${k}</div><div class="v${ar ? ' ar' : ''}">${v}</div>`).join('')}</div>`;
 const fileCard = (icon, name, meta, side, act) => `<button class="file"${act ? ` data-act="${act}"` : ''}><div class="ico">${svg(icon)}</div><div style="flex:1;min-width:0"><div class="n">${esc(name)}</div><div class="m">${meta}</div></div>${side || ''}</button>`;
@@ -162,7 +162,12 @@ P.device = () => {
         <div class="check"><span class="dot ok"></span><span>${t('إنقاذ جوال ثاني بالـ OTG', 'Rescue another phone over OTG')}</span></div>
         <div class="check"><span class="dot bad"></span><span>${t('التفليش والنسخ على هذا الجوال', 'Flashing and backups on this phone')}</span></div></div>
       <button class="btn" data-act="refresh">${svg('refresh')}<span>${t('تحديث', 'Refresh')}</span></button></main>` + nav();
-  return top + `<main>${updateBanner()}${device}
+  const tile = (cls, icon, big, label) => `<div class="tile2 ${cls}">${svg(icon)}<div><b>${big}</b><span>${label}</span></div></div>`;
+  const tiles = `<div class="sect">${t('نظرة سريعة', 'At a glance')}</div><div class="tiles">
+    ${tile('b', 'power', p.battery + '%', t('البطارية', 'Battery'))}${tile('m', 'device', esc(p.android || '?'), 'Android')}${tile('s', 'flash', esc((p.slot || '-').replace('_', '')), t('السلوت', 'Slot'))}
+    ${tile('m', 'backup', mine.length, t('نسخ احتياطية', 'Backups'))}${tile('s', 'shield', esc(p.rootManager ? p.rootManager.split(' ')[0] : '?'), t('الروت', 'Root'))}${tile('b', 'lock', p.unlocked ? t('مفتوح', 'Open') : t('مقفل', 'Locked'), 'Bootloader')}</div>
+    <div class="sect">${t('التفاصيل', 'Details')}</div>`;
+  return top + `<main>${updateBanner()}${tiles}${device}
     <div class="card"><h2>${t('الكيرنل والحماية', 'Kernel and security')} ${p.avb ? chip(avbKind, 'AVB ' + esc(p.avb)) : ''}</h2>
     ${rows([[t('الكيرنل', 'Kernel'), esc(p.kernel)], p.kmi ? ['KMI', esc(p.kmi)] : null, [t('البوت لودر', 'Bootloader'), unlocked, A],
       p.selinux ? ['SELinux', esc(p.selinux)] : null, [t('الروت', 'Root'), esc(p.rootManager || t('متاح', 'Granted')), !p.rootManager && A]])}</div>
@@ -220,11 +225,12 @@ P.flash = () => {
   const targets = p.targets || [];
   const flashable = f.check && f.check.check.canFlash;
   return top + `<main>
-    <div><div class="label">${t('١. الملف', '1. The file')}</div>${src}
-      <div class="row2" style="margin-top:${src ? 8 : 0}px"><button class="btn sm" data-act="pickBackup"><span>${t('من النسخ', 'From backups')}</span></button><button class="btn sm" data-act="pickFile"><span>${t('ملف IMG أو ZIP', 'IMG or ZIP file')}</span></button></div></div>
-    <div><div class="label">${t('٢. القسم', '2. Partition')}</div>
+    <div><div class="label">${t('1. الملف', '1. The file')}</div>${src}
+      <div style="margin-top:${src ? 8 : 0}px;display:flex;flex-direction:column;gap:6px"><button class="opt" data-act="pickBackup" style="width:100%;text-align:start"><span class="oi">${svg('backup')}</span><div><b>${t('من النسخ الاحتياطية', 'From backups')}</b><small>${t('صورة من نسخة أخذها التطبيق لهذا الجوال', 'An image from a backup the app made of this phone')}</small></div><span class="chev" style="margin-inline-start:auto;color:var(--faint)">${A ? '‹' : '›'}</span></button>
+        <button class="opt" data-act="pickFile" style="width:100%;text-align:start"><span class="oi">${svg('file')}</span><div><b>${t('ملف IMG أو ZIP', 'An IMG or ZIP file')}</b><small>${t('من ملفات الجوال، ويتحقق منه قبل أي كتابة', 'From the phone’s files, checked before any write')}</small></div><span class="chev" style="margin-inline-start:auto;color:var(--faint)">${A ? '‹' : '›'}</span></button></div></div>
+    <div><div class="label">${t('2. القسم', '2. Partition')}</div>
       <div class="parts">${ALLOWED.map(b => `<button class="${f.base === b ? 'on' : ''}" data-act="base" data-v="${b}" ${targets.includes(b) ? '' : 'disabled'}>${b}</button>`).join('')}</div></div>
-    ${p.ab ? `<div><div class="label">${t('٣. السلوت', '3. Slot')}</div>
+    ${p.ab ? `<div><div class="label">${t('3. السلوت', '3. Slot')}</div>
       <div class="seg"><button class="${f.other ? '' : 'on'}" data-act="slot" data-v="0"><b>${t('الحالي', 'Current')} ${LE(p.slot)}</b>${t('يبان بعد إعادة التشغيل', 'Takes effect on restart')}</button><button class="${f.other ? 'on' : ''}" data-act="slot" data-v="1"><b>${t('الثاني', 'Other')} ${LE(slotName(p, true))}</b>${t('للمتقدمين', 'Advanced')}</button></div></div>` : ''}
     ${f.src && f.src.type === 'file' ? `<div><div class="label">${t('بصمة المطور SHA-256 (اختياري)', 'Developer’s SHA-256 (optional)')}</div><input class="input" data-in="fexp" value="${esc(f.expected)}" placeholder="${t('الصق البصمة اللي نشرها المطور', 'Paste the hash the developer published')}" spellcheck="false" autocomplete="off"></div>` : ''}
     ${f.checking ? spinner(t('يتحقق من الملف…', 'Checking the file…')) : f.err ? errBanner(f.err) : f.check ? checkBanner(f.check.check, 'image') : !f.src ? `<div class="note">${t('اختر الملف والقسم، والتطبيق يتحقق منه قبل أي كتابة.', 'Pick the file and the partition; the app checks it before anything is written.')}</div>` : ''}
@@ -375,7 +381,7 @@ P.backup = () => {
   return top + `<main>
     <div class="row2"><button class="btn primary" data-act="bkNew"><span>${t('نسخة جديدة', 'New backup')}</span></button><button class="btn" data-act="bkVerifyAll" ${list && list.some(b => b.mine) ? '' : 'disabled'}><span>${t('تحقق من الكل', 'Verify all')}</span></button></div>
     ${items}${detail}
-  </main>` + nav();
+  </main><button class="fab" data-act="bkNew" aria-label="${t('نسخة جديدة', 'New backup')}">+</button>` + nav();
 };
 
 P.otg = () => {
@@ -410,12 +416,12 @@ P.otg = () => {
       [t('السلوت', 'Slot'), esc(p.slot || t('بدون', 'none')), !p.slot && A], p.maxDownload ? ['max-download', esc(mib(p.maxDownload))] : null])}</div>
     ${p.unlocked === 'no' ? `<div class="banner warn">${svg('lock')}<div class="body note">${t('البوت لودر مقفل: غالباً بيرفض التفليش.', 'The bootloader is locked: it will most likely refuse to flash.')}</div></div>` : ''}
     ${o.err ? errBanner(o.err) : ''}
-    <div><div class="label">${t('١. الملف', '1. The file')}</div>${src}
+    <div><div class="label">${t('1. الملف', '1. The file')}</div>${src}
       <div class="row2" style="margin-top:${src ? 8 : 0}px"><button class="btn sm" data-act="otgFolder"><span>${t('من مجلد نسخة', 'From a backup folder')}</span></button><button class="btn sm" data-act="otgPickFile"><span>${t('ملف IMG', 'IMG file')}</span></button></div></div>
     ${folderFiles}
-    <div><div class="label">${t('٢. القسم', '2. Partition')}</div>
+    <div><div class="label">${t('2. القسم', '2. Partition')}</div>
       <div class="parts">${ALLOWED.map(b => `<button class="${o.base === b ? 'on' : ''}" data-act="otgBase" data-v="${b}" ${(p.targets || []).includes(b) ? '' : 'disabled'}>${b}</button>`).join('')}</div></div>
-    ${p.slot ? `<div><div class="label">${t('٣. السلوت', '3. Slot')}</div><div class="seg"><button class="${o.other ? '' : 'on'}" data-act="otgSlot" data-v="0"><b>${t('الحالي', 'Current')} ${LE(p.slot)}</b></button><button class="${o.other ? 'on' : ''}" data-act="otgSlot" data-v="1"><b>${t('الثاني', 'Other')} ${LE(p.slot === '_a' ? '_b' : '_a')}</b></button></div></div>` : ''}
+    ${p.slot ? `<div><div class="label">${t('3. السلوت', '3. Slot')}</div><div class="seg"><button class="${o.other ? '' : 'on'}" data-act="otgSlot" data-v="0"><b>${t('الحالي', 'Current')} ${LE(p.slot)}</b></button><button class="${o.other ? 'on' : ''}" data-act="otgSlot" data-v="1"><b>${t('الثاني', 'Other')} ${LE(p.slot === '_a' ? '_b' : '_a')}</b></button></div></div>` : ''}
     ${o.src && o.src.type === 'file' ? `<div><div class="label">${t('بصمة المطور SHA-256 (اختياري)', 'Developer’s SHA-256 (optional)')}</div><input class="input" data-in="oexp" value="${esc(o.expected)}" placeholder="${t('الصق البصمة اللي نشرها المطور', 'Paste the hash the developer published')}" spellcheck="false" autocomplete="off"></div>` : ''}
     ${o.checking ? spinner(t('يتحقق من الملف…', 'Checking the file…')) : o.check ? checkBanner(o.check.check, 'otg') + (o.check.tooBigForDownload ? errBanner('too-big-for-download') : '') : ''}
     ${o.check && !o.check.check.canFlash ? whyButton('otg') : ''}<button class="btn primary" data-act="otgFlash" ${flashable ? '' : 'disabled'}><span>${o.base ? t(`أرسل وفلّش ${LE(o.base)}${slot ? ' على ' + LE(slot) : ''}`, `Send and flash ${esc(o.base)}${slot ? ' to ' + esc(slot) : ''}`) : t('أرسل وفلّش', 'Send and flash')}</span></button>
@@ -443,7 +449,9 @@ P.settings = () => {
   const tog = (key, b, small) => `<button class="setrow" data-act="toggle" data-k="${key}"><div class="tx"><b>${b}</b><small>${small}</small></div><span class="toggle${s[key] ? ' on' : ''}"></span></button>`;
   return head(t('الإعدادات', 'Settings'), t('المظهر واللغة والأمان', 'Appearance, language and safety'), '', true) + `<main>
     <div class="card"><h2>${t('المظهر', 'Appearance')}</h2>
-      ${seg('theme', [['auto', t('تلقائي', 'Auto'), t('مثل الجوال', 'Like the phone')], ['dark', t('ليلي', 'Night'), t('داكن', 'Dark')], ['light', t('نهاري', 'Day'), t('فاتح', 'Light')]])}
+      ${[['auto', 'device', t('تلقائي', 'Auto'), t('مثل الجوال: داكن بالليل وفاتح بالنهار', 'Like the phone: dark at night, light by day')], ['dark', 'about', t('داكن', 'Dark'), t('الألوان المطفية، مريحة للعين', 'Soft muted colours, easy on the eyes')], ['light', 'power', t('فاتح', 'Light'), t('خلفية فاتحة وواضحة', 'A bright, clear background')]].map(([v, i, b, sm]) => `<button class="opt${s.theme === v ? ' on' : ''}" data-act="set" data-k="theme" data-v="${v}" style="width:100%;text-align:start"><span class="oi">${svg(i)}</span><div><b>${b}</b><small>${sm}</small></div><span class="r"></span></button>`).join('<div style="height:6px"></div>')}
+      <div class="label" style="margin-top:14px">${t('حجم الخط', 'Text size')}</div>
+      <div class="seg size">${[['s', t('صغير', 'Small'), 12], ['m', t('عادي', 'Normal'), 14], ['l', t('كبير', 'Large'), 16], ['xl', t('أكبر', 'Larger'), 18]].map(([v, b, px]) => `<button class="${(s.textSize || 'm') === v ? 'on' : ''}" data-act="set" data-k="textSize" data-v="${v}"><b style="font-size:${px}px">${b}</b></button>`).join('')}</div>
       <div class="label" style="margin-top:12px">${t('اللغة', 'Language')}</div>
       ${seg('lang', [['ar', 'العربية'], ['en', 'English']])}</div>
     <div class="card"><h2>${t('الأمان', 'Safety')}</h2>
@@ -472,13 +480,18 @@ P.logs = () => {
 };
 
 P.about = () => head(t('حول', 'About'), 'Fastboot Studio Mobile', '', true) + `<main>
-  <div class="card" style="text-align:center"><div class="big-ok"><img src="icon.png" alt="" style="width:72px;height:72px;border-radius:18px"><h3 class="appname"><img class="an an-dark" src="appname-dark.svg" alt="Fastboot Studio Mobile"><img class="an an-light" src="appname-light.svg" alt="Fastboot Studio Mobile"></h3><div class="note ltr">v${esc(st.version)} · MIT</div></div>
-    <div class="sig-row"><img class="sig sig-dark" src="ifoknr-dark.svg" alt="IFOKNR"><img class="sig sig-light" src="ifoknr-light.svg" alt="IFOKNR"></div>
-    <div class="note">${t('تطوير IFOKNR. مبني على مكتبة Fastboot Studio، المبنية على Fastboot Enhance من LibXZR.', 'By IFOKNR. Built on the Fastboot Studio library, which is based on Fastboot Enhance by LibXZR.')}</div></div>
-  <div class="card list">
-    ${[['https://t.me/IFOKNR1', 'tg', t('تواصل', 'Contact'), '@IFOKNR1'], ['https://github.com/ifoknr', 'gh', 'GitHub', 'ifoknr'], ['https://github.com/ifoknr/FastbootStudio', 'pc', 'Fastboot Studio (Windows)', 'github.com/ifoknr/FastbootStudio']].map(([u, i, b, s]) => `<button class="it" data-act="link" data-v="${u}"><div class="ic">${svg(i)}</div><div><b>${b}</b><small class="ltr">${s}</small></div><span class="chev">${A ? '‹' : '›'}</span></button>`).join('')}
-  </div>
-  <div class="note">${t('التطبيق ما يرسل أي بيانات لأي جهة. الاتصال الوحيد: يسأل GitHub عن آخر إصدار، إذا التحقق من التحديثات شغّال. الخطوط Roboto و Noto Kufi Arabic برخصة OFL.', 'The app sends no data anywhere. Its only connection asks GitHub for the latest version, when the update check is on. Fonts: Roboto and Noto Kufi Arabic, under the OFL.')}</div>
+  <div class="hero"><div class="cookie"><img src="icon-themed.png" alt=""></div>
+    <h3 class="appname"><img class="an an-dark" src="appname-dark.svg" alt="Fastboot Studio Mobile"><img class="an an-light" src="appname-light.svg" alt="Fastboot Studio Mobile"></h3>
+    <div class="tag">${t('فلّش وخذ نسخة وروّت جوالك من الجوال نفسه، بأمان.', 'Flash, back up and root from the phone itself, safely.')}</div>
+    <div class="tags">${chip('', 'v' + esc(st.version))}${chip('', 'MIT')}${chip('', t('مجاني ومفتوح المصدر', 'Free & open source'))}</div>
+    <button class="btn primary sm" style="width:auto;margin-top:6px" data-act="updCheck"><span>${t('افحص التحديثات', 'Check for updates')}</span></button></div>
+  <div class="card"><div class="dev"><img class="tile" src="ifoknr-tile.svg" alt=""><div class="who"><img class="sig sig-dark" src="ifoknr-dark.svg" alt="IFOKNR"><img class="sig sig-light" src="ifoknr-light.svg" alt="IFOKNR"><svg class="swoosh" viewBox="0 0 220 16" preserveAspectRatio="none"><defs><linearGradient id="sw"><stop offset="0" stop-color="#cabeff"/><stop offset="1" stop-color="#edb8cc" stop-opacity=".2"/></linearGradient></defs><path d="M4 11 C 60 2, 120 2, 216 7" fill="none" stroke="url(#sw)" stroke-width="2.4" stroke-linecap="round"/></svg><div class="role">${t('المطوّر', 'Developer')}</div></div></div>
+  <div class="card list" style="padding:0">
+    ${[['https://t.me/IFOKNR1', 'tg', 'Telegram', '@IFOKNR1'], ['https://t.me/BeNeXTBrO', 'tg', t('قروب التيليجرام', 'Telegram group'), 't.me/BeNeXTBrO'], ['https://github.com/ifoknr', 'gh', 'GitHub', 'github.com/ifoknr'], ['https://ifoknr.com', 'pc', t('كل أدواتي', 'All my tools'), 'ifoknr.com']].map(([u, i, b, s]) => `<button class="it" data-act="link" data-v="${u}"><div class="ic">${svg(i)}</div><div><b>${b}</b><small class="ltr">${s}</small></div><span class="chev">${A ? '‹' : '›'}</span></button>`).join('')}
+  </div></div>
+  <div class="card"><h2>${t('مبني على', 'Built on')}</h2><div class="note" style="color:var(--text)">${t('مكتبة Fastboot Studio، المبنية على Fastboot Enhance من LibXZR (رخصة MIT).', 'The Fastboot Studio library, based on Fastboot Enhance by LibXZR (MIT License).')}</div>
+    <div class="note" style="margin-top:8px">${t('التطبيق ما يرسل أي بيانات لأي جهة. الاتصال الوحيد: يسأل GitHub عن آخر إصدار.', 'The app sends no data anywhere. Its only connection asks GitHub for the latest version.')}</div></div>
+  <div class="made">${t('صُنع بواسطة IFOKNR · 2026', 'Made by IFOKNR · 2026')}</div>
 </main>` + nav();
 
 // ---------------------------------------------------------------- sheets
@@ -595,6 +608,7 @@ function applyLook() {
   document.documentElement.dir = A ? 'rtl' : 'ltr';
   const dark = st.s.theme === 'auto' ? st.systemDark : st.s.theme === 'dark';
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  document.documentElement.dataset.size = st.s.textSize || 'm';
   call('ui.bars', { dark }).catch(() => {});
 }
 
