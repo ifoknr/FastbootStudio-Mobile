@@ -186,3 +186,9 @@ ol.how { padding-inline-start: 18px; font-size: 13px; color: var(--dim); display
 .sig { height: 26px; width: auto; }
 .sig-light, :root[data-theme=light] .sig-dark { display: none; }
 :root[data-theme=light] .sig-light { display: block; }
+
+/* The app name in the Prixma Bold Italic lettering, as outlines; one picture per theme. */
+.appname { display: flex; justify-content: center; margin: 10px 0 4px; }
+.an { height: 17px; width: auto; }
+.an-light, :root[data-theme=light] .an-dark { display: none; }
+:root[data-theme=light] .an-light { display: block; }
