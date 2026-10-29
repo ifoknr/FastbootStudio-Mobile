@@ -49,7 +49,7 @@ namespace FastbootStudio.Mobile
             bridge = new Bridge(this, new Phone(this), settings, otg);
 
             web = new WebView(this);
-            web.SetBackgroundColor(Color.ParseColor(settings.Theme == "light" || (settings.Theme == "auto" && !SystemDark) ? "#F3F5F8" : "#0E1116"));
+            web.SetBackgroundColor(Color.ParseColor(settings.Theme == "light" || (settings.Theme == "auto" && !SystemDark) ? "#FAF9FD" : "#2A2A2C"));
             WebSettings s = web.Settings;
             s.JavaScriptEnabled = true;
             // Assets load whatever these say; the page reads no file and no content:// itself.
@@ -122,9 +122,12 @@ namespace FastbootStudio.Mobile
         /// <summary>Status and navigation bars in the page's colours.</summary>
         public void Bars(bool dark) => RunOnUiThread(() =>
         {
-            Color color = Color.ParseColor(dark ? "#0E1116" : "#F3F5F8");
+            // The page's own background (--bg), so the bars and the page are one surface. From
+            // Android 15 the bars are see-through and the window background shows behind them.
+            Color color = Color.ParseColor(dark ? "#2A2A2C" : "#FAF9FD");
+            Window.SetBackgroundDrawable(new Android.Graphics.Drawables.ColorDrawable(color));
             Window.SetStatusBarColor(color);
-            Window.SetNavigationBarColor(Color.ParseColor(dark ? "#0A0D12" : "#E9EDF2"));
+            Window.SetNavigationBarColor(color);
             web?.SetBackgroundColor(color);
             if (OperatingSystem.IsAndroidVersionAtLeast(30))
             {
