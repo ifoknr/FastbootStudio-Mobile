@@ -27,6 +27,9 @@ namespace FastbootStudio.Mobile.Native
         /// <summary>The lowest battery level a flash on this phone starts at.</summary>
         public int MinBattery => prefs.GetInt("minBattery", 50);
 
+        /// <summary>Text size on every page: "s", "m" (the default), "l" or "xl".</summary>
+        public string TextSize => prefs.GetString("textSize", "m");
+
         /// <summary>Look for a new version once a day; off, the person checks from Settings.</summary>
         public bool AutoUpdate => prefs.GetBoolean("autoUpdate", true);
 
@@ -53,6 +56,11 @@ namespace FastbootStudio.Mobile.Native
                         string lang = Text(value);
                         if (lang == "ar" || lang == "en")
                             e.PutString("lang", lang);
+                        break;
+                    case "textSize":
+                        string size = Text(value);
+                        if (size == "s" || size == "m" || size == "l" || size == "xl")
+                            e.PutString("textSize", size);
                         break;
                     case "dev":
                     case "autoUpdate":
@@ -81,6 +89,7 @@ namespace FastbootStudio.Mobile.Native
         {
             ["theme"] = Theme, ["lang"] = Lang, ["dev"] = DeveloperMode, ["backupFirst"] = BackupFirst,
             ["readBack"] = ReadBack, ["minBattery"] = MinBattery, ["autoUpdate"] = AutoUpdate,
+            ["textSize"] = TextSize,
         };
     }
 }

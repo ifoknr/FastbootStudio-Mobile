@@ -49,7 +49,7 @@ namespace FastbootStudio.Mobile
             bridge = new Bridge(this, new Phone(this), settings, otg);
 
             web = new WebView(this);
-            web.SetBackgroundColor(Color.ParseColor(settings.Theme == "light" || (settings.Theme == "auto" && !SystemDark) ? "#F3F5F8" : "#0E1116"));
+            web.SetBackgroundColor(Color.ParseColor(settings.Theme == "light" || (settings.Theme == "auto" && !SystemDark) ? "#FDF8FF" : "#2A2A2C"));
             WebSettings s = web.Settings;
             s.JavaScriptEnabled = true;
             // Assets load whatever these say; the page reads no file and no content:// itself.
@@ -119,12 +119,13 @@ namespace FastbootStudio.Mobile
             else Window.ClearFlags(WindowManagerFlags.KeepScreenOn);
         });
 
-        /// <summary>Status and navigation bars in the page's colours.</summary>
+        /// <summary>Status and navigation bars in the page's colours (--bg and --rail in ui/style.css),
+        /// so the page runs from the top of the screen to the bottom.</summary>
         public void Bars(bool dark) => RunOnUiThread(() =>
         {
-            Color color = Color.ParseColor(dark ? "#0E1116" : "#F3F5F8");
+            Color color = Color.ParseColor(dark ? "#2A2A2C" : "#FDF8FF");
             Window.SetStatusBarColor(color);
-            Window.SetNavigationBarColor(Color.ParseColor(dark ? "#0A0D12" : "#E9EDF2"));
+            Window.SetNavigationBarColor(Color.ParseColor(dark ? "#2A2A2C" : "#F1ECF4"));
             web?.SetBackgroundColor(color);
             if (OperatingSystem.IsAndroidVersionAtLeast(30))
             {
