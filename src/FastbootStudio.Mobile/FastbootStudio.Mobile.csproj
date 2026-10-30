@@ -8,8 +8,8 @@
     <RootNamespace>FastbootStudio.Mobile</RootNamespace>
     <ApplicationId>com.ifoknr.fastbootstudio.mobile</ApplicationId>
     <ApplicationTitle>Fastboot Studio</ApplicationTitle>
-    <ApplicationVersion>2</ApplicationVersion>
-    <ApplicationDisplayVersion>1.0.0</ApplicationDisplayVersion>
+    <ApplicationVersion>3</ApplicationVersion>
+    <ApplicationDisplayVersion>1.1.0</ApplicationDisplayVersion>
     <AndroidPackageFormat>apk</AndroidPackageFormat>
     <!-- Phones; a test build for the x86_64 emulator passes -p:FbsRids=android-x64. -->
     <FbsRids Condition="'$(FbsRids)' == ''">android-arm64;android-arm</FbsRids>

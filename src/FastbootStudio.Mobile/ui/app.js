@@ -57,7 +57,7 @@ const svg = k => `<svg viewBox="0 0 24 24">${ic[k]}</svg>`;
 const ALLOWED = ['boot', 'init_boot', 'vendor_boot', 'dtbo', 'vbmeta', 'vbmeta_system', 'recovery'];
 const st = {
   ready: false, s: { theme: 'auto', lang: 'ar', dev: false, backupFirst: true, readBack: true, minBattery: 50 },
-  systemDark: true, version: '1.0.0', backupRoot: '/sdcard/FastbootStudio/Backups',
+  systemDark: true, version: '1.1.0', backupRoot: '/sdcard/FastbootStudio/Backups',
   tab: 'device', page: null,
   phone: null, phoneErr: null, refreshing: false,
   backups: null, bk: {}, bkOpen: null,
