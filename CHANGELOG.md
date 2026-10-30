@@ -2,6 +2,18 @@
 
 <!-- The "## vX.Y.Z" section is the release notes and the Telegram post (.github/scripts/telegram-release.sh): Arabic bullets, then "**English**" and the same bullets in English. Keep it short. -->
 
+## v1.1.0
+- شكل جديد بالكامل (Material 3): ألوان هادية وأيقونة رمادية
+- إعداد جديد لحجم الخط: صغير، افتراضي، كبير، أكبر
+- صفحة «حول» جديدة، و«نظرة سريعة» أوضح
+- شريط الحالة والتنقل بنفس لون التطبيق، بدون شرائط غامقة
+
+**English**
+- A whole new look (Material 3): calm colours and a grey icon
+- A new text size setting: Small, Default, Large, Larger
+- A new About page and a clearer At a glance
+- The status and navigation bars in the app's colour, no dark bands
+
 ## v1.0.0
 - أول نسخة رسمية من Fastboot Studio للجوال، مو بيتا
 - أيقونة جديدة بنفس شكل عائلة Fastboot Studio
