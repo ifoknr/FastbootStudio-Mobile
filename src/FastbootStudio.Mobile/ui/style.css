@@ -253,6 +253,9 @@ ol.how { padding-inline-start: 18px; font-size: calc(13px * var(--k)); color: va
 .an { height: calc(18px * var(--k)); width: auto; }
 .an-light, :root[data-theme=light] .an-dark { display: none; }
 :root[data-theme=light] .an-light { display: block; }
+/* The app icon: grey glass in dark, frosted glass in light. */
+.ic-light, :root[data-theme=light] .ic-dark { display: none; }
+:root[data-theme=light] .ic-light { display: block; }
 
 /* ===== Material 3 Expressive sample (XGram colours) ===== */
 header { padding: 14px 18px 10px; }

@@ -25,7 +25,7 @@ The full guide and the source files are in `ifoknr/tools`, folder `brand/` (BRAN
 - ifoknr.com uses a new mark and name: `IF` and `IFOKNR` in the Audiowide lettering, a graphite
   tile, the name silver on dark and graphite on light.
 - App and tool names are drawn in the Prixma Bold Italic lettering, small.
-- Each app and tool has a fixed icon; since 30 Oct 2026 all are grey (graphite tile, calm
-  grey-blue lines). App icons are never violet.
+- Each app and tool has a fixed icon, never violet. Since 9 Nov 2026 the Fastboot Studio apps'
+  icons are glass (docs/icon): grey glass in dark, frosted glass with a blue bolt in light.
 - Never commit a font file (personal-use licences): text is drawn as outlines.
 - Numbers in English digits in every language.

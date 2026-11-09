@@ -78,7 +78,7 @@ const st = {
 
 // ---------------------------------------------------------------- small parts
 
-const head = (title, sub, chip, back) => `<header>${back ? `<button class="back" data-act="back">${A ? '›' : '‹'}</button>` : '<img src="icon-themed.png" alt="">'}
+const head = (title, sub, chip, back) => `<header>${back ? `<button class="back" data-act="back">${A ? '›' : '‹'}</button>` : '<img class="ic-dark" src="icon-themed.png" alt=""><img class="ic-light" src="icon-light.png" alt="">'}
 <div class="t"><h1>${title}</h1><p>${sub || ''}</p></div>${chip || ''}</header>`;
 const rows = r => `<div class="rows">${r.filter(Boolean).map(([k, v, ar]) => `<div class="k">${k}</div><div class="v${ar ? ' ar' : ''}">${v}</div>`).join('')}</div>`;
 const fileCard = (icon, name, meta, side, act) => `<button class="file"${act ? ` data-act="${act}"` : ''}><div class="ico">${svg(icon)}</div><div style="flex:1;min-width:0"><div class="n">${esc(name)}</div><div class="m">${meta}</div></div>${side || ''}</button>`;
@@ -480,7 +480,7 @@ P.logs = () => {
 };
 
 P.about = () => head(t('حول', 'About'), 'Fastboot Studio Mobile', '', true) + `<main>
-  <div class="hero"><div class="cookie"><img src="icon-themed.png" alt=""></div>
+  <div class="hero"><div class="cookie"><img class="ic-dark" src="icon-themed.png" alt=""><img class="ic-light" src="icon-light.png" alt=""></div>
     <h3 class="appname"><img class="an an-dark" src="appname-dark.svg" alt="Fastboot Studio Mobile"><img class="an an-light" src="appname-light.svg" alt="Fastboot Studio Mobile"></h3>
     <div class="tag">${t('فلّش وخذ نسخة وروّت جوالك من الجوال نفسه، بأمان.', 'Flash, back up and root from the phone itself, safely.')}</div>
     <div class="tags">${chip('', 'v' + esc(st.version))}${chip('', 'MIT')}${chip('', t('مجاني ومفتوح المصدر', 'Free & open source'))}</div>
