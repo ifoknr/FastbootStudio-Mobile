@@ -2,6 +2,14 @@
 
 <!-- The "## vX.Y.Z" section is the release notes and the Telegram post (.github/scripts/telegram-release.sh): Arabic bullets, then "**English**" and the same bullets in English. Keep it short. -->
 
+## v1.2.0
+- أيقونة زجاجية جديدة: جوال وصاعقة، رمادي زجاجي بالليلي وأبيض مثلّج بالنهاري
+- شعار التطبيق داخل الواجهة يتبدّل مع الوضع الليلي والنهاري
+
+**English**
+- A new glass icon: a phone and a bolt, grey glass in dark, frosted white in light
+- The logo inside the app follows the dark and light theme
+
 ## v1.1.0
 - شكل جديد بالكامل (Material 3): ألوان هادية وأيقونة رمادية
 - إعداد جديد لحجم الخط: صغير، افتراضي، كبير، أكبر
