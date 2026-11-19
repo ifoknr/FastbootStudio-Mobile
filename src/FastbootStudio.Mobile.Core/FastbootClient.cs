@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Threading;
 
 namespace FastbootStudio.Mobile.Core
 {
@@ -60,22 +62,56 @@ namespace FastbootStudio.Mobile.Core
         /// <summary>max-download-size: hex ("0x10000000") or decimal; null when not reported.</summary>
         public long? MaxDownloadSize()
         {
-            string value = TryGetVar("max-download-size");
-            if (string.IsNullOrEmpty(value))
+            return ParseSize(TryGetVar("max-download-size"));
+        }
+
+        /// <summary>
+        /// A size as a bootloader prints it: hex ("0x10000000") or decimal. Sizes have no sign,
+        /// so "0xFFFFFFFFFFFFFFFF" is the largest size there is, not -1; null when it is not a number.
+        /// </summary>
+        public static long? ParseSize(string value)
+        {
+            value = (value ?? "").Trim();
+            bool hex = value.StartsWith("0x", StringComparison.OrdinalIgnoreCase);
+            if (hex)
+                value = value.Substring(2);
+            if (!ulong.TryParse(value, hex ? NumberStyles.AllowHexSpecifier : NumberStyles.None, CultureInfo.InvariantCulture, out ulong size))
                 return null;
-            value = value.Trim();
-            try
+            return size > long.MaxValue ? long.MaxValue : (long)size;
+        }
+
+        /// <summary>
+        /// The allowed partitions the bootloader has, with their sizes ("partition-size:boot_a").
+        /// A bootloader that answers no partition-size at all still says which partitions have
+        /// slots: then those it knows are listed with size -1 (unknown), and the bootloader
+        /// itself refuses a flash to one it does not have.
+        /// </summary>
+        public Dictionary<string, long> AllowedPartitions()
+        {
+            Dictionary<string, long> sized = new Dictionary<string, long>(StringComparer.Ordinal);
+            List<string> known = new List<string>();
+            foreach (string b in FlashTargets.Allowed)
             {
-                return value.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
-                    ? Convert.ToInt64(value.Substring(2), 16)
-                    : long.Parse(value);
+                string hasSlot = (TryGetVar("has-slot:" + b) ?? "").Trim();
+                string[] names = hasSlot == "yes" ? new[] { b + "_a", b + "_b" } : new[] { b };
+                if (hasSlot == "yes" || hasSlot == "no")
+                    known.AddRange(names);
+                foreach (string name in names)
+                {
+                    long? bytes = ParseSize(TryGetVar("partition-size:" + name));
+                    if (bytes.HasValue)
+                        sized[name] = bytes.Value;
+                }
             }
-            catch (FormatException) { return null; }
-            catch (OverflowException) { return null; }
+            if (sized.Count == 0)
+                foreach (string name in known)
+                    sized[name] = -1;
+            return sized;
         }
 
         /// <summary>Sends an image into the bootloader's buffer ("download:%08x", DATA, the bytes, OKAY).</summary>
-        public void Download(Stream data, long length, Action<long> progress = null)
+        /// <param name="cancel">Checked before every piece: a cancelled download throws OperationCanceledException with nothing written to any partition (the image only ever reached the bootloader's memory).</param>
+        public void Download(Stream data, long length, Action<long> progress = null, CancellationToken cancel = default)
         {
             if (length <= 0 || length > uint.MaxValue)
                 throw new ArgumentOutOfRangeException(nameof(length));
@@ -96,6 +132,7 @@ namespace FastbootStudio.Mobile.Core
             long sent = 0;
             while (sent < length)
             {
+                cancel.ThrowIfCancellationRequested();
                 int want = (int)Math.Min(buffer.Length, length - sent);
                 int read = ReadFully(data, buffer, want);
                 if (read != want)

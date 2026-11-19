@@ -103,6 +103,22 @@ namespace FastbootStudio.Mobile.Core
             Sh.Lines(checkOutput).Where(l => l.Contains(": FAILED")).Select(l => l.Substring(0, l.IndexOf(": FAILED", StringComparison.Ordinal))).ToList();
 
         /// <summary>
+        /// The files of a backup whose SHA-256 in SHA256SUMS is not the one the app kept in its
+        /// own storage when it made the backup, or that are gone from SHA256SUMS: shared storage
+        /// lets another app rewrite an image and its line together, so "sha256sum -c" alone passes.
+        /// </summary>
+        public static List<string> NotAsRecorded(IReadOnlyDictionary<string, string> sums, IReadOnlyDictionary<string, string> recorded)
+        {
+            List<string> changed = new List<string>();
+            if (recorded == null)
+                return changed;
+            foreach (KeyValuePair<string, string> kept in recorded)
+                if (sums == null || !sums.TryGetValue(kept.Key, out string now) || !string.Equals(now, kept.Value, StringComparison.OrdinalIgnoreCase))
+                    changed.Add(kept.Key);
+            return changed;
+        }
+
+        /// <summary>
         /// The same, with how the check ended. A check that ended badly without naming a file
         /// (the folder or its SHA256SUMS is gone or unreadable), or that checked no file at all,
         /// is never "verified": SHA256SUMS itself is reported.

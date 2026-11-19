@@ -388,6 +388,21 @@ namespace FastbootStudio.Mobile.Core.Tests
         }
 
         [Fact]
+        public void A_file_added_to_a_backup_the_app_recorded_is_refused()
+        {
+            using Samples s = new Samples();
+            BackupFolder b = s.Backup("a1b2c3d4", "Xiaomi 13T Pro", "corot_global", ("init_boot_a.img", Samples.BootImage(false)), ("boot_a.img", Samples.BootImage(true)));
+            // The app made this backup with init_boot only; boot_a.img and its SHA256SUMS line came later.
+            var recorded = new System.Collections.Generic.Dictionary<string, string> { ["init_boot_a.img"] = b.Sums["init_boot_a.img"] };
+            CheckResult r = ImageCheck.FromBackup(b, "boot_a.img", "boot_a", 8 << 20, Samples.Phone, recorded);
+            Assert.Contains(r.Items, i => i.Code == CheckCode.HashMatches);
+            CheckItem added = Assert.Single(r.Items, i => i.Code == CheckCode.NotRecorded);
+            Assert.False(added.DeveloperOverride);
+            Assert.False(r.CanFlashFor(true));
+            Assert.True(ImageCheck.FromBackup(b, "init_boot_a.img", "init_boot_a", 8 << 20, Samples.Phone, recorded).CanFlash);
+        }
+
+        [Fact]
         public void A_script_line_too_long_to_read_is_refused()
         {
             ScriptScan.Hit hit = Assert.Single(ScriptScan.Scan("echo " + new string('a', 9000) + "; rm -rf /data\n"));

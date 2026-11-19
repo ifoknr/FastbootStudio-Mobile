@@ -51,6 +51,25 @@ namespace FastbootStudio.Mobile.Core.Tests
         public void A_beta_is_offered_the_newest_beta() =>
             Assert.Equal("1.0.0-beta.2", UpdateCheck.Newest(List, "1.0.0-beta.1").Version);
 
+        [Theory]
+        [InlineData("1.0.0-beta.1", "1.0.0", -1)]
+        [InlineData("1.0.0-beta.1", "1.0.0-beta.2", -1)]
+        [InlineData("1.0.0-beta.2", "1.0.0-beta.10", -1)]
+        [InlineData("1.0.0-beta.2", "1.0.0-rc.1", -1)]
+        [InlineData("1.0.0-beta", "1.0.0-beta.1", -1)]
+        [InlineData("1.0.0", "1.0.1-beta.1", -1)]
+        [InlineData("v1.0.0-beta.1", "1.0.0-beta.1", 0)]
+        [InlineData("1.0.0", "1.0.0-rc.9", 1)]
+        public void Pre_releases_sort_below_their_release_and_by_their_numbers(string a, string b, int order)
+        {
+            Assert.Equal(order, UpdateCheck.Compare(a, b));
+            Assert.Equal(-order, UpdateCheck.Compare(b, a));
+        }
+
+        [Fact]
+        public void A_beta_is_offered_the_release_it_led_to_whatever_the_order_of_the_list() =>
+            Assert.Equal("1.0.0", UpdateCheck.Newest("[{\"tag_name\":\"v1.0.0-beta.3\",\"prerelease\":true},{\"tag_name\":\"v1.0.0\"},{\"tag_name\":\"v1.0.0-beta.10\",\"prerelease\":true}]", "1.0.0-beta.2").Version);
+
         [Fact]
         public void A_release_is_never_offered_a_beta() =>
             Assert.Equal("0.9.0", UpdateCheck.Newest(List, "1.0.0").Version);

@@ -24,6 +24,14 @@ namespace FastbootStudio.Mobile.Core.Tests
         [InlineData("cd /; rm -rf /*", "delete")]
         [InlineData("curl -o /tmp/x https://example.com/x", "network")]
         [InlineData("wget http://example.com/x -O /tmp/x", "network")]
+        [InlineData("rm -rf -- /data", "delete")]
+        [InlineData("/system/bin/rm -rf /data/media/0", "delete")]
+        [InlineData("cat fw.img | tee /dev/block/by-name/modem >/dev/null", "write")]
+        [InlineData("cp fw.img /dev/block/bootdevice/by-name/persist", "write")]
+        [InlineData("mv $AKHOME/abl.elf \"/dev/block/by-name/abl_a\" 2>/dev/null;", "write")]
+        [InlineData("/system/bin/curl -o /tmp/x https://example.com/x", "network")]
+        [InlineData("$BB/wget http://example.com/x", "network")]
+        [InlineData("/system/bin/blkdiscard /dev/block/sda", "wipe")]
         public void Finds_what_no_kernel_installer_does(string line, string reason)
         {
             ScriptScan.Hit hit = Assert.Single(ScriptScan.Scan("#!/sbin/sh\n" + line + "\n"));
@@ -39,6 +47,10 @@ namespace FastbootStudio.Mobile.Core.Tests
         [InlineData("flash_generic vendor_dlkm;")]
         [InlineData("insert_line init.tuna.rc \"nodiratime barrier=0\" after \"mount_all /fstab.tuna\" \"\\tmount ext4 /dev/block/platform/omap/omap_hsmmc.0/by-name/userdata /data remount\";")]
         [InlineData("rm -rf $AKHOME;")]
+        [InlineData("rm -rf -- $AKHOME;")]
+        [InlineData("cp /dev/block/by-name/modem_a $AKHOME/modem.img")]
+        [InlineData("cp boot-new.img /dev/block/by-name/boot_a")]
+        [InlineData("cat boot-new.img | tee /dev/block/by-name/boot_a >/dev/null")]
         [InlineData("rm -rf /apex/apexak3 /apex 2>/dev/null;")]
         [InlineData("[ -L /etc_link ] && rm -rf /etc/*;")]
         [InlineData("rm -rf /data/adb/modules/old_module")]

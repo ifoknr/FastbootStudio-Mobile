@@ -66,6 +66,12 @@ namespace FastbootStudio.Mobile.Core
         /// storage can be written by other apps, the app's own record cannot.
         /// </summary>
         BackupTampered,
+
+        /// <summary>
+        /// The app made this backup and kept its SHA-256s, but this file is not among them: it
+        /// was added to the folder (and to SHA256SUMS) afterwards.
+        /// </summary>
+        NotRecorded,
     }
 
     public sealed class CheckItem

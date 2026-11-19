@@ -28,15 +28,20 @@ namespace FastbootStudio.Mobile.Core
             new Regex(@">\s*\S*/dev/block/\S*?/(?:by-name/)?(" + Forbidden + @")(_a|_b)?(?=[\s;""')&|]|$)", RegexOptions.IgnoreCase),
             // AnyKernel3's own helper, named with a partition it must not touch
             new Regex(@"\bflash_generic\s+[""']?(" + Forbidden + @")\b", RegexOptions.IgnoreCase),
+            // ... | tee /dev/block/.../modem: everything tee is given is written
+            new Regex(@"(^|[\s;&|(`/])tee\s[^;&|]*?/dev/block/\S*?/(?:by-name/)?(" + Forbidden + @")(_a|_b)?(?=[\s;""')&|]|$)", RegexOptions.IgnoreCase),
+            // cp x /dev/block/.../persist, mv x ...: the last name is the one written (reading a partition is not a write)
+            new Regex(@"(^|[\s;&|(`/])(cp|mv)\s[^;&|]*\s[""']?/dev/block/\S*?/(?:by-name/)?(" + Forbidden + @")(_a|_b)?[""']?(\s+\d*>\S+)*\s*(?=[;&|)]|$)", RegexOptions.IgnoreCase),
         };
 
-        static readonly Regex Wipe = new Regex(@"(^|[\s;&|(`])(blkdiscard|mkfs(\.\w+)?|mke2fs|make_ext4fs|make_f2fs|mkfs\.f2fs|sgdisk|parted|wipefs|sfdisk|fdisk)\b");
+        // A command is found by its name alone or behind a path ("/system/bin/blkdiscard", "$BB/wget").
+        static readonly Regex Wipe = new Regex(@"(^|[\s;&|(`/])(blkdiscard|mkfs(\.\w+)?|mke2fs|make_ext4fs|make_f2fs|mkfs\.f2fs|sgdisk|parted|wipefs|sfdisk|fdisk)\b");
 
-        static readonly Regex Network = new Regex(@"(^|[\s;&|(`])(curl|wget|nc|ncat|telnet|ftpget|tftp)\s");
+        static readonly Regex Network = new Regex(@"(^|[\s;&|(`/])(curl|wget|nc|ncat|telnet|ftpget|tftp)\s");
 
         /// <summary>rm -rf of a whole tree the phone needs: /, /data, the shared storage, /system...</summary>
         static readonly Regex Delete = new Regex(
-            @"(^|[\s;&|(`])rm\s+(-[a-zA-Z]+\s+)*[""']?(/|/\*|/data|/data/media(/0)?|/sdcard|/storage/emulated(/0)?|/storage|/system|/vendor|/persist|/mnt/vendor/persist|/metadata|/efs)/?\*?[""']?(?=[\s;&|)]|$)");
+            @"(^|[\s;&|(`/])rm\s+(-[a-zA-Z]+\s+|--\s+)*[""']?(/|/\*|/data|/data/media(/0)?|/sdcard|/storage/emulated(/0)?|/storage|/system|/vendor|/persist|/mnt/vendor/persist|/metadata|/efs)/?\*?[""']?(?=[\s;&|)]|$)");
 
         public sealed class Hit
         {

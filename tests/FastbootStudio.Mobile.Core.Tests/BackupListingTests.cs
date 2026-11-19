@@ -51,6 +51,18 @@ namespace FastbootStudio.Mobile.Core.Tests
             Assert.Equal(new[] { "boot_a.img" }, BackupListing.Failed("boot_a.img: FAILED\ninit_boot_a.img: OK\n", false));
         }
 
+        [Fact]
+        public void A_backup_is_also_compared_with_the_app_s_own_record()
+        {
+            var recorded = new System.Collections.Generic.Dictionary<string, string> { ["boot_a.img"] = new string('a', 64), ["dtbo_a.img"] = new string('b', 64) };
+            var same = new System.Collections.Generic.Dictionary<string, string> { ["boot_a.img"] = new string('A', 64), ["dtbo_a.img"] = new string('b', 64), ["extra.img"] = new string('c', 64) };
+            Assert.Empty(BackupListing.NotAsRecorded(same, recorded));
+            var swapped = new System.Collections.Generic.Dictionary<string, string> { ["boot_a.img"] = new string('f', 64) };
+            Assert.Equal(new[] { "boot_a.img", "dtbo_a.img" }, BackupListing.NotAsRecorded(swapped, recorded));
+            Assert.Equal(2, BackupListing.NotAsRecorded(null, recorded).Count);
+            Assert.Empty(BackupListing.NotAsRecorded(swapped, null));
+        }
+
         [Theory]
         [InlineData("Xiaomi_13T_Pro_a1b2c3d4_20261015-221804", true)]
         [InlineData(".partial-x", false)]

@@ -90,14 +90,17 @@ namespace FastbootStudio.Mobile.Core
             if (!run.Ok)
             {
                 // A failure half-way can leave the partition changed: then the backup has to go back.
-                outcome.Changed = Hash(target) != before;
+                outcome.Changed = Differs(before, Hash(target));
                 return Fail("install-failed: " + (Sh.Lines(run.Error).LastOrDefault() ?? "exit " + run.ExitCode));
             }
             outcome.Installed = true;
-            outcome.Changed = Hash(target) != before;
+            outcome.Changed = Differs(before, Hash(target));
             Step(outcome.Changed ? "done " + target + " changed" : "done, but " + target + " is unchanged");
             return outcome;
         }
+
+        /// <summary>A partition that could not be hashed, before or after, is not known to be unchanged: it counts as changed.</summary>
+        static bool Differs(string before, string after) => before == null || after == null || before != after;
 
         string Hash(string partition) => Sh.Sha(shell.Run("sha256sum " + Sh.Q(flasher.ByNameDir + "/" + partition)).Output);
     }

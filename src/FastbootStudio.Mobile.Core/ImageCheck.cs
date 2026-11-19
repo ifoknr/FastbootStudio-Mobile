@@ -59,6 +59,9 @@ namespace FastbootStudio.Mobile.Core
                 else
                     result.Add(CheckLevel.Block, CheckCode.BackupTampered, kept, result.Sha256);
             }
+            else if (recorded != null)
+                // The app's record of this backup has no such file: SHA256SUMS alone cannot vouch for it.
+                result.Add(CheckLevel.Block, CheckCode.NotRecorded, fileName ?? "");
 
             CheckContent(result, path, partition, partitionBytes, phone);
             return result;

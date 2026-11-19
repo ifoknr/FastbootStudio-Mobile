@@ -82,6 +82,35 @@ namespace FastbootStudio.Mobile.Core
             return new List<string>();
         }
 
+        /// <summary>Why the last <see cref="Backup"/> returned null, when it is known: "no-space".</summary>
+        public string BackupError { get; private set; }
+
+        /// <summary>The bytes a backup of these partitions takes, or null when a size cannot be read.</summary>
+        public long? BackupBytes(IEnumerable<string> partitions)
+        {
+            long total = 0;
+            foreach (string partition in partitions)
+            {
+                long? bytes = PartitionBytes(partition);
+                if (bytes == null)
+                    return null;
+                total += bytes.Value;
+            }
+            return total;
+        }
+
+        /// <summary>The free bytes where a folder is (df), or null when it cannot be read.</summary>
+        public long? FreeBytes(string folder)
+        {
+            // Filesystem 1K-blocks Used Available Use% Mounted on (-P keeps it on one line).
+            ShellResult r = shell.Run("df -Pk " + Sh.Q(folder) + " | tail -n 1");
+            string[] cols = (Sh.Lines(r.Output).LastOrDefault() ?? "").Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+            return r.Ok && cols.Length >= 4 && long.TryParse(cols[3], NumberStyles.None, CultureInfo.InvariantCulture, out long kb) ? kb * 1024 : (long?)null;
+        }
+
+        /// <summary>Room left beside the images for SHA256SUMS and backup-info.txt.</summary>
+        public const long BackupMargin = 1 << 20;
+
         public long? PartitionBytes(string partition)
         {
             if (!Sh.IsPartitionName(partition) || (byName == null && Partitions().Count == 0))
@@ -145,7 +174,7 @@ namespace FastbootStudio.Mobile.Core
             {
                 string folder = Backup(new[] { partition }, phone, "before-flash", Step);
                 if (folder == null)
-                    return Fail("backup-failed");
+                    return Fail(BackupError ?? "backup-failed");
                 outcome.BackupFolder = folder;
             }
 
@@ -155,9 +184,11 @@ namespace FastbootStudio.Mobile.Core
             if (!write.Ok)
                 return Fail("write-failed: " + write.Error.Trim());
             outcome.Written = true;
+            Step("written " + partition);
 
             if (readBack)
             {
+                Step("verify " + partition);
                 ShellResult back = shell.Run("head -c " + length.ToString(CultureInfo.InvariantCulture) + " " + Sh.Q(device) + " | sha256sum");
                 string got = Sh.Sha(back.Output);
                 if (got != sha)
@@ -176,12 +207,34 @@ namespace FastbootStudio.Mobile.Core
         /// </summary>
         public string Backup(IEnumerable<string> partitions, PhoneIdentity phone, string set, Action<string> progress = null)
         {
+            BackupError = null;
             List<string> names = Partitions();
             string model = Safe(phone?.Model ?? "device"), serial = Safe(phone?.Serial ?? "unknown");
-            string name = model + "_" + serial + "_" + now().ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
-            string partial = backupRoot + "/.partial-" + name, final = backupRoot + "/" + name;
-            if (!shell.Run("mkdir -p " + Sh.Q(partial)).Ok)
+            DateTime stamp = now();
+            string partial, final;
+            // A folder name is never used twice: "mv" onto a backup made in the same second would
+            // put this one inside it. A name that is taken gets the next second.
+            for (int attempt = 0; ; attempt++)
+            {
+                string name = model + "_" + serial + "_" + stamp.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+                partial = backupRoot + "/.partial-" + name;
+                final = backupRoot + "/" + name;
+                if (shell.Run("[ ! -e " + Sh.Q(final) + " ] && [ ! -e " + Sh.Q(partial) + " ] && mkdir -p " + Sh.Q(partial)).Ok)
+                    break;
+                if (attempt == 4)
+                    return null;
+                stamp = stamp.AddSeconds(1);
+            }
+            partitions = partitions.Where(p => Sh.IsPartitionName(p) && names.Contains(p)).ToList();
+            // The images are as big as their partitions: a backup that cannot fit is not started.
+            long? need = BackupBytes(partitions), free = FreeBytes(partial);
+            if (need.HasValue && free.HasValue && need.Value + BackupMargin > free.Value)
+            {
+                shell.Run("rm -rf " + Sh.Q(partial));
+                BackupError = "no-space";
+                progress?.Invoke("backup needs " + need.Value.ToString(CultureInfo.InvariantCulture) + " bytes, free " + free.Value.ToString(CultureInfo.InvariantCulture));
                 return null;
+            }
 
             List<string> sums = new List<string>(), table = new List<string>();
             foreach (string partition in partitions)
@@ -213,7 +266,7 @@ namespace FastbootStudio.Mobile.Core
                 + "\nmode\tmobile\nset\t" + set + "\nsource\t" + byName + "\n\npartition\tbytes\tsha256\n" + string.Join("\n", table) + "\n";
             ShellResult written = shell.Run("printf '%s' " + Sh.Q(string.Join("\n", sums) + "\n") + " > " + Sh.Q(partial + "/SHA256SUMS")
                 + " && printf '%s' " + Sh.Q(info) + " > " + Sh.Q(partial + "/backup-info.txt")
-                + " && mv " + Sh.Q(partial) + " " + Sh.Q(final));
+                + " && [ ! -e " + Sh.Q(final) + " ] && mv " + Sh.Q(partial) + " " + Sh.Q(final));
             if (!written.Ok)
             {
                 shell.Run("rm -rf " + Sh.Q(partial));

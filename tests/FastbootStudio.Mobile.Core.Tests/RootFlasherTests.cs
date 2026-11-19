@@ -201,6 +201,64 @@ namespace FastbootStudio.Mobile.Core.Tests
             Assert.False(Directory.Exists(phone.Backups) && Directory.EnumerateFileSystemEntries(phone.Backups).Any());
         }
 
+        [Fact]
+        public void The_steps_say_when_the_write_ended_and_the_read_back_began()
+        {
+            using FilePhone phone = new FilePhone(("vbmeta_a", 16384));
+            using Samples s = new Samples();
+            string vbmeta = s.File("vbmeta.img", Samples.Vbmeta());
+            phone.Override = script => script.StartsWith("head -c") ? new ShellResult(0, new string('0', 64) + "  -\n", "") : null;
+            FlashOutcome failed = phone.Flasher().Flash(vbmeta, "vbmeta_a", Checked(vbmeta, "vbmeta_a", 16384), new Consent { TypedName = "vbmeta" }, Samples.Phone);
+            // The write is over and the read-back is what failed: the page marks that step, not the write.
+            Assert.Contains("written vbmeta_a", failed.Log);
+            Assert.Contains("verify vbmeta_a", failed.Log);
+            Assert.DoesNotContain(failed.Log, l => l.StartsWith("verify ok") || l.StartsWith("done "));
+
+            phone.Override = script => script.StartsWith("dd if=") && script.Contains("conv=notrunc") ? new ShellResult(1, "", "I/O error") : null;
+            FlashOutcome unwritten = phone.Flasher().Flash(vbmeta, "vbmeta_a", Checked(vbmeta, "vbmeta_a", 16384), new Consent { TypedName = "vbmeta" }, Samples.Phone, backupFirst: false);
+            Assert.DoesNotContain(unwritten.Log, l => l.StartsWith("written "));
+        }
+
+        [Fact]
+        public void Two_backups_in_the_same_second_get_two_folders()
+        {
+            using FilePhone phone = new FilePhone(("boot_a", 8192));
+            RootFlasher flasher = phone.Flasher();
+            string first = flasher.Backup(new[] { "boot_a" }, Samples.Phone, "boot");
+            string second = flasher.Backup(new[] { "boot_a" }, Samples.Phone, "boot");
+            Assert.EndsWith("_20261018-101544", first);
+            Assert.EndsWith("_20261018-101545", second);
+            // Neither went inside the other, and both are whole.
+            Assert.Equal(2, Directory.GetDirectories(phone.Backups).Length);
+            foreach (string folder in new[] { first, second })
+                Assert.Equal(new[] { "SHA256SUMS", "backup-info.txt", "boot_a.img" }, Directory.GetFileSystemEntries(folder).Select(Path.GetFileName).OrderBy(n => n, StringComparer.Ordinal));
+        }
+
+        [Fact]
+        public void A_backup_that_cannot_fit_is_not_started_and_nothing_is_written()
+        {
+            using FilePhone phone = new FilePhone(("vbmeta_a", 16384));
+            using Samples s = new Samples();
+            string vbmeta = s.File("vbmeta.img", Samples.Vbmeta());
+            byte[] before = phone.Partition("vbmeta_a");
+            // 512 KiB free: less than the partition and the room kept for the text files.
+            phone.Override = script => script.StartsWith("df ") ? new ShellResult(0, "Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/fuse 1000 488 512 49% /storage/emulated\n", "") : null;
+            RootFlasher flasher = phone.Flasher();
+            Assert.Equal(512 * 1024, flasher.FreeBytes(phone.Backups));
+            Assert.Equal(16384, flasher.BackupBytes(new[] { "vbmeta_a" }));
+            FlashOutcome outcome = flasher.Flash(vbmeta, "vbmeta_a", Checked(vbmeta, "vbmeta_a", 16384), new Consent { TypedName = "vbmeta" }, Samples.Phone);
+            Assert.Equal("no-space", outcome.Error);
+            Assert.False(outcome.Touched);
+            Assert.Equal(before, phone.Partition("vbmeta_a"));
+            Assert.DoesNotContain(phone.Scripts, x => x.StartsWith("dd if="));
+            Assert.False(Directory.EnumerateFileSystemEntries(phone.Backups).Any());
+
+            // With room, or when the free space cannot be read, the backup goes ahead.
+            phone.Override = script => script.StartsWith("df ") ? new ShellResult(1, "", "df: not found") : null;
+            Assert.NotNull(flasher.Backup(new[] { "vbmeta_a" }, Samples.Phone, "boot"));
+            Assert.Null(flasher.BackupError);
+        }
+
         [Theory]
         [InlineData("init_boot_a", true)]
         [InlineData("boot", true)]
@@ -297,6 +355,21 @@ namespace FastbootStudio.Mobile.Core.Tests
 
             File.AppendAllText(path, "x");
             Assert.Equal("file-changed", installer.Install(path, zip, new Consent { NoticeAccepted = true }, Samples.Phone, "_a").Error);
+        }
+
+        [Fact]
+        public void A_partition_that_cannot_be_hashed_is_never_called_unchanged()
+        {
+            using FilePhone phone = new FilePhone(("boot_a", 8192));
+            using Samples s = new Samples();
+            string path = Zip(s, phone, installer: "#!/sbin/sh\necho 'abort' >&2\nexit 1\n");
+            AnyKernelZip zip = AnyKernelZip.Inspect(path, Samples.Phone);
+            AnyKernelInstaller installer = new AnyKernelInstaller(phone, phone.Flasher(), Path.Combine(phone.Root, "work"));
+            // sha256sum of the partition fails before and after: nothing says the installer left it alone.
+            phone.Override = script => script.StartsWith("sha256sum") && script.Contains("/by-name/") ? new ShellResult(1, "", "I/O error") : null;
+            KernelOutcome failed = installer.Install(path, zip, new Consent { NoticeAccepted = true }, Samples.Phone, "_a", backupFirst: false);
+            Assert.StartsWith("install-failed", failed.Error);
+            Assert.True(failed.Changed);
         }
     }
 }
