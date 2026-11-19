@@ -40,6 +40,8 @@ const M = {
   slotWord: slot => slot ? t(` · السلوت ${LE(slot.replace('_', ''))}`, ` · slot ${esc(slot.replace('_', ''))}`) : '',
   targetThis: (partition, slot) => t(`بينكتب على القسم ${LE(partition)}${M.slotWord(slot)} في هذا الجوال.`, `This writes partition ${esc(partition)}${M.slotWord(slot)} on this phone.`),
   targetOtg: (partition, slot, serial) => t(`بينكتب على القسم ${LE(partition)}${M.slotWord(slot)} في الجوال الموصول ${LE(serial)}.`, `This writes partition ${esc(partition)}${M.slotWord(slot)} on the connected phone ${esc(serial)}.`),
+  rebootSilent: () => t('انرسل أمر التشغيل. الجوال طفى الاتصال بدون رد، وهذا عادي في بعض البوت لودرات.', 'Restart sent. The phone dropped the link without answering, which is normal for some bootloaders.'),
+  sizesUnknown: () => t('هذا البوت لودر ما يعطي حجم الأقسام، فالتطبيق ما يقدر يتأكد إن الملف يكفيه القسم. إذا الملف أكبر، البوت لودر نفسه بيرفضه.', 'This bootloader does not report partition sizes, so the app cannot check that a file fits its partition. If the file is too big, the bootloader itself refuses it.'),
   on: () => t('شغّال', 'On'),
   off: () => t('مقفل', 'Off'),
 };

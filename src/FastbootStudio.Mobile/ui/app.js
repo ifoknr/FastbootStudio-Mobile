@@ -426,6 +426,7 @@ P.otg = () => {
     <div class="card"><h2>${t('الجوال الموصول', 'The connected phone')} ${chip('', p.userspace ? 'fastbootd' : 'fastboot')}</h2>
     ${rows([[t('المنتج', 'Product'), esc(p.product || '?')], [t('البوت لودر', 'Bootloader'), p.unlocked === 'yes' ? t('مفتوح', 'Unlocked') : p.unlocked === 'no' ? t('مقفل', 'Locked') : t('غير معروف', 'Unknown'), A],
       [t('السلوت', 'Slot'), esc(p.slot || t('بدون', 'none')), !p.slot && A], p.maxDownload ? ['max-download', esc(mib(p.maxDownload))] : null])}</div>
+    ${p.sizesKnown === false ? `<div class="banner info">${svg('info')}<div class="body note">${M.sizesUnknown()}</div></div>` : ''}
     ${p.unlocked === 'no' ? `<div class="banner warn">${svg('lock')}<div class="body note">${t('البوت لودر مقفل: غالباً بيرفض التفليش.', 'The bootloader is locked: it will most likely refuse to flash.')}</div></div>` : ''}
     ${o.err ? errBanner(o.err) : ''}
     <div><div class="label">${t('1. الملف', '1. The file')}</div>${src}
@@ -980,7 +981,7 @@ const actions = {
     } catch (e) { r.cancelling = false; fail(e); }
   },
   otgReboot: async el => {
-    try { await call('otg.reboot', { target: el.dataset.v || null }); toast(t('انرسل أمر التشغيل', 'Restart sent')); }
+    try { const r = await call('otg.reboot', { target: el.dataset.v || null }); toast(r && r.answered === false ? M.rebootSilent() : t('انرسل أمر التشغيل', 'Restart sent')); }
     catch (e) { fail(e); }
     st.run = null; st.o.phone = null; resetOtgFile(); scanOtg();
     call('run.clear').catch(() => {});

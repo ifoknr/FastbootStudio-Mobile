@@ -19,6 +19,7 @@ namespace FastbootStudio.Mobile.Core.Tests
         public readonly MemoryStream Received = new MemoryStream();
         public readonly Dictionary<string, byte[]> Flashed = new Dictionary<string, byte[]>();
         public string FailFlash;
+        public bool SilentReboot;
         readonly Queue<string> replies = new Queue<string>();
         long expecting;
 
@@ -54,7 +55,11 @@ namespace FastbootStudio.Mobile.Core.Tests
                 replies.Enqueue("OKAY");
             }
             else if (command.StartsWith("reboot"))
-                replies.Enqueue("OKAY");
+            {
+                // Some bootloaders restart at once and never answer.
+                if (!SilentReboot)
+                    replies.Enqueue("OKAY");
+            }
             else
                 replies.Enqueue("FAILunknown command");
         }
@@ -171,6 +176,19 @@ namespace FastbootStudio.Mobile.Core.Tests
                 client.Download(new MemoryStream(image), image.Length, sent => stop.Cancel(), stop.Token));
             Assert.Equal(1 << 20, phone.Received.Length);
             Assert.DoesNotContain(phone.Commands, c => c.StartsWith("flash:"));
+        }
+
+        [Fact]
+        public void A_bootloader_that_restarts_without_answering_has_restarted()
+        {
+            FakeBootloader phone = new FakeBootloader();
+            Assert.True(new FastbootClient(phone).Reboot("bootloader"));
+            phone.SilentReboot = true;
+            // The command went out and the link fell silent: that is the restart, not a refusal.
+            Assert.False(new FastbootClient(phone).Reboot());
+            Assert.Contains("reboot", phone.Commands);
+            // A refusal (FAIL) is an answer, and still an error.
+            Assert.False(Assert.Throws<FastbootException>(() => new FastbootClient(phone).GetVar("nothing")).NoReply);
         }
 
         [Fact]

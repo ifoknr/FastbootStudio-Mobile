@@ -263,8 +263,7 @@ namespace FastbootStudio.Mobile.Native
                     string target = Json.Str(a, "target");
                     if (target != null && target != "bootloader" && target != "recovery" && target != "fastboot")
                         throw new BridgeError("bad-target");
-                    otg.Reboot(target);
-                    return null;
+                    return new JsonObject { ["answered"] = otg.Reboot(target) };
                 case "otg.close":
                     otg.Close();
                     return null;

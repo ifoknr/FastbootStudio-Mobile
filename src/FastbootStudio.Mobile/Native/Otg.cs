@@ -293,7 +293,8 @@ namespace FastbootStudio.Mobile.Native
             }
         }
 
-        public void Reboot(string target)
+        /// <returns>False when the phone restarted without answering (see <see cref="FastbootClient.Reboot"/>).</returns>
+        public bool Reboot(string target)
         {
             lock (gate)
             {
@@ -302,7 +303,10 @@ namespace FastbootStudio.Mobile.Native
                 try
                 {
                     Log.Add("otg: reboot " + (target ?? ""));
-                    client.Reboot(target);
+                    bool answered = client.Reboot(target);
+                    if (!answered)
+                        Log.Add("otg: no answer to reboot: the phone restarted without one");
+                    return answered;
                 }
                 catch (FastbootException e)
                 {
@@ -415,6 +419,8 @@ namespace FastbootStudio.Mobile.Native
             ["serial"] = Serial, ["product"] = Product, ["unlocked"] = Unlocked, ["userspace"] = Userspace,
             ["bootloader"] = Bootloader, ["maxDownload"] = MaxDownload, ["slot"] = Slot,
             ["targets"] = Json.Strings(FlashTargets.Allowed.Where(b => Target(b, false) != null)),
+            // False when this bootloader gives no partition sizes: the page says a file's size cannot be checked against the partition.
+            ["sizesKnown"] = Partitions.Count == 0 || Partitions.Values.Any(v => v >= 0),
         };
     }
 }

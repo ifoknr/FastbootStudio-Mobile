@@ -1,6 +1,7 @@
 'use strict';
 // A pretend phone for previews and screenshots in a desktop browser. Not packed into the app.
 // ?lang=ar|en&theme=dark|light&root=0&dev=1&otg=1
+// &sizes=0: an OTG bootloader that gives no partition sizes; &silent=1: one that restarts without answering.
 // &resume=1: the page comes back to a flash already running; &space=low: no room for a backup; &slow=1: a slow OTG send, to cancel.
 
 (function () {
@@ -152,7 +153,7 @@
     'open': () => null,
     'otg.scan': () => q.get('otg') === '1' ? [Object.assign({}, otgDevice, { open: !!otgPhone })] : [],
     'otg.connect': () => new Promise(r => setTimeout(() => {
-      otgPhone = { serial: '9f8e7d6c', product: 'sweet', unlocked: 'yes', userspace: false, bootloader: 'unknown', maxDownload: 268435456, slot: '_a', targets: ['boot', 'vendor_boot', 'dtbo', 'vbmeta', 'recovery'] };
+      otgPhone = { serial: '9f8e7d6c', product: 'sweet', unlocked: 'yes', userspace: false, bootloader: 'unknown', maxDownload: 268435456, slot: '_a', targets: ['boot', 'vendor_boot', 'dtbo', 'vbmeta', 'recovery'], sizesKnown: q.get('sizes') !== '0' };
       r(otgPhone);
     }, 600)),
     'otg.check': a => {
@@ -171,7 +172,7 @@
       return { partition: p.partition, sha256: p.check.sha256 };
     },
     'otg.cancel': () => { otgStop = true; return { cancelled: true }; },
-    'otg.reboot': () => { otgPhone = null; return null; },
+    'otg.reboot': () => { otgPhone = null; return { answered: q.get('silent') !== '1' }; },
     'otg.close': () => { otgPhone = null; return null; },
   };
 

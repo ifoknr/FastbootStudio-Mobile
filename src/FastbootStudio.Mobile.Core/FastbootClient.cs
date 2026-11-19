@@ -20,6 +20,11 @@ namespace FastbootStudio.Mobile.Core
     public sealed class FastbootException : Exception
     {
         public FastbootException(string message) : base(message) { }
+
+        public FastbootException(string message, bool noReply) : base(message) { NoReply = noReply; }
+
+        /// <summary>The phone answered nothing at all (the link is gone or silent), as against answering FAIL.</summary>
+        public bool NoReply { get; }
     }
 
     /// <summary>
@@ -33,6 +38,7 @@ namespace FastbootStudio.Mobile.Core
         public const int MaxCommand = 64;
         const int ReplyTimeout = 30000;
         const int FlashTimeout = 120000;
+        const int RebootTimeout = 5000;
 
         readonly IFastbootTransport transport;
 
@@ -152,11 +158,24 @@ namespace FastbootStudio.Mobile.Core
             Command("flash:" + partition, FlashTimeout);
         }
 
-        public void Reboot(string target = null)
+        /// <returns>
+        /// True when the bootloader answered OKAY. False when the command went out and the phone
+        /// then said nothing: some bootloaders restart at once without answering, and the link
+        /// dropping right after "reboot" is that restart. A FAIL is still an error.
+        /// </returns>
+        public bool Reboot(string target = null)
         {
             if (target != null && target != "bootloader" && target != "recovery" && target != "fastboot")
                 throw new ArgumentException("bad reboot target", nameof(target));
-            Command(target == null ? "reboot" : "reboot-" + target, ReplyTimeout);
+            try
+            {
+                Command(target == null ? "reboot" : "reboot-" + target, RebootTimeout);
+                return true;
+            }
+            catch (FastbootException e) when (e.NoReply)
+            {
+                return false;
+            }
         }
 
         /// <summary>
@@ -207,7 +226,7 @@ namespace FastbootStudio.Mobile.Core
             {
                 int read = transport.Read(packet, timeoutMs);
                 if (read < 4)
-                    throw new FastbootException(read <= 0 ? "no reply from the phone" : "short reply from the phone");
+                    throw new FastbootException(read <= 0 ? "no reply from the phone" : "short reply from the phone", read <= 0);
                 string text = Encoding.ASCII.GetString(packet, 0, read);
                 kind = text.Substring(0, 4);
                 string rest = text.Substring(4);
