@@ -1,0 +1,9 @@
+<resources>
+    <!-- The phone in its light theme: the window that shows before the page is the light page's colour, not a dark flash. -->
+    <style name="AppTheme" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+        <item name="android:windowBackground">#FAF9FD</item>
+        <item name="android:statusBarColor">#FAF9FD</item>
+        <item name="android:navigationBarColor">#FAF9FD</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

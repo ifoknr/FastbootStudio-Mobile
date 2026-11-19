@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The launcher icon in two layers (rendered from docs/icon/glass-dark.svg): the launcher cuts its own shape
+     out of them instead of shrinking the square picture onto a white plate. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@mipmap/appicon_background" />
+    <foreground android:drawable="@mipmap/appicon_foreground" />
+</adaptive-icon>
