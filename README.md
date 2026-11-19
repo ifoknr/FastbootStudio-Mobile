@@ -61,13 +61,15 @@ critical and full backups for you.
 ### ⚡ Flash
 Pick an image from your backups or any `.img` / `.zip`, the partition (boot, init_boot,
 vendor_boot, dtbo, vbmeta, vbmeta_system, recovery) and the slot. The check runs at once and
-says in plain words what it found. Every flash asks first, and the current partition is backed
-up before it is written.
+says in plain words what it found. Every flash asks first, naming the partition and the slot,
+and the current partition is backed up before it is written. While it runs, a notification keeps
+the job alive if you leave the app, and the page picks it up again when you come back.
 
 ### 🧩 Kernels (AnyKernel3)
 Reads the zip before it runs: the kernel version and KMI inside, the devices it is made for,
 the Android range, and every script in it. A kernel from another series (5.10 on a 6.1 phone)
-or a script that touches what a kernel never needs is refused.
+or a script that touches what a kernel never needs is refused. The script check is a best
+effort, not a guarantee: only flash zips from a developer you trust.
 
 </td>
 <td width="50%" valign="top">
@@ -75,15 +77,18 @@ or a script that touches what a kernel never needs is refused.
 ### 💾 Backups
 The same folders as the Windows app and the Companion (`/sdcard/FastbootStudio/Backups`), with
 `SHA256SUMS`. Check them all in one tap, open one, restore a partition from it. The app keeps
-its own private record of each backup's hashes, so a file swapped later is caught.
+its own private record of each backup's hashes, so a file swapped or added later is caught. A new
+backup shows what it needs against the free space, and is not started when it cannot fit.
 
 ### 🔌 OTG
 Connect another phone in fastboot mode with a USB OTG cable: the app reads its partitions and
 flashes the allowed ones, to that phone only, by its serial. No root needed on either phone.
+A send can be cancelled until the bootloader starts writing.
 
 ### ⚙️ More
 Settings (theme, language, backup before flashing, read-back check, minimum battery, developer
-mode, updates), the log, and About.
+mode, updates), the log (copy it or save it to a file), and About. The Device page copies the
+phone's details for a support message.
 
 </td>
 </tr>
