@@ -143,6 +143,32 @@ namespace FastbootStudio.Mobile
             else Window.ClearFlags(WindowManagerFlags.KeepScreenOn);
         });
 
+        /// <summary>
+        /// Android 13 and later show a notification only with the person's leave. It is asked for once,
+        /// when the first job starts (its notification is what keeps the job alive in the background).
+        /// A "no" changes nothing for the job: the service still runs, without a visible notification.
+        /// </summary>
+        public void AskNotifications(Settings settings)
+        {
+            const string permission = "android.permission.POST_NOTIFICATIONS";
+            try
+            {
+                if (!OperatingSystem.IsAndroidVersionAtLeast(33) || settings.AskedNotifications)
+                    return;
+                settings.AskedNotifications = true;
+                RunOnUiThread(() =>
+                {
+                    try
+                    {
+                        if (!IsFinishing && !IsDestroyed && CheckSelfPermission(permission) != Permission.Granted)
+                            RequestPermissions(new[] { permission }, 44);
+                    }
+                    catch (Exception e) { Native.Log.Add("notification permission: " + e.Message); }
+                });
+            }
+            catch (Exception e) { Native.Log.Add("notification permission: " + e.Message); }
+        }
+
         /// <summary>Status and navigation bars in the page's colours.</summary>
         public void Bars(bool dark) => RunOnUiThread(() =>
         {

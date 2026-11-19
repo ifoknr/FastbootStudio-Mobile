@@ -40,6 +40,13 @@ namespace FastbootStudio.Mobile.Native
             set { using (ISharedPreferencesEditor e = prefs.Edit()) { e.PutLong("lastUpdateCheck", value); e.Apply(); } }
         }
 
+        /// <summary>The permission to show notifications was asked for once (Android 13 and later): it is not asked again.</summary>
+        public bool AskedNotifications
+        {
+            get => prefs.GetBoolean("askedNotifications", false);
+            set { using (ISharedPreferencesEditor e = prefs.Edit()) { e.PutBoolean("askedNotifications", value); e.Apply(); } }
+        }
+
         /// <summary>Changes one setting; anything not listed here, or out of range, is ignored.</summary>
         public void Set(string key, JsonNode value)
         {

@@ -93,6 +93,7 @@ namespace FastbootStudio.Mobile.Native
             lock (runGate)
                 if (runMeta != null && !runEnded)
                     runLines.Add(line);
+            JobService.Step(null, line);
             Send("progress", new JsonObject { ["line"] = line });
         }
 
@@ -295,6 +296,13 @@ namespace FastbootStudio.Mobile.Native
                 running = true;
                 live?.KeepAwake(true);
             }
+            if (tracked)
+            {
+                // Android keeps the process while this shows; if it cannot be started, the job runs as before (JobService catches it all).
+                JsonObject run = a["run"] as JsonObject;
+                JobService.Begin(activity, Json.Str(run, "kind"), Json.Str(run, "partition"), settings.Lang);
+                activity.AskNotifications(settings);
+            }
             string error = null;
             JsonNode result = null;
             try
@@ -329,6 +337,8 @@ namespace FastbootStudio.Mobile.Native
                     running = false;
                     live?.KeepAwake(false);
                 }
+                if (tracked)
+                    JobService.End();
                 busy.Release();
                 if (end != null)
                     Send("runEnd", end);
@@ -778,6 +788,7 @@ namespace FastbootStudio.Mobile.Native
                     runSent = sent;
                     runTotal = total;
                 }
+                JobService.Step(null, null, (int)percent);
                 Event("otgProgress", new JsonObject { ["sent"] = sent, ["total"] = total });
             });
             return new JsonObject { ["partition"] = p.Partition, ["sha256"] = p.Check.Sha256 };
