@@ -322,6 +322,7 @@ nav button.on .pill { background: var(--sc); }
    touch areas of at least 48px around the small controls (the control itself keeps its size), and no motion
    for people who turned it off in the phone's settings. */
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sheet:focus, .sheet:focus-visible { outline: none; }
 header .back, button.chip, .btn.sm, .parts button, button.toggle { position: relative; }
 header .back::after, .btn.sm::after { content: ""; position: absolute; inset: -4px 0; }
 button.chip::after { content: ""; position: absolute; inset: -11px -4px; }

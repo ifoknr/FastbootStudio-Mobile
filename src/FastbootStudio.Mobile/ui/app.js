@@ -89,7 +89,7 @@ const chip = (kind, text) => `<span class="chip ${kind || ''}">${text}</span>`;
 const LEVEL = { ok: ['ok', '✓'], notice: ['info', '!'], warn: ['warn', '!'], block: ['bad', '✗'] };
 const navItems = () => [['device', t('الجهاز', 'Device')], ['flash', t('التفليش', 'Flash')], ['backup', t('النسخ', 'Backups')], ['otg', 'OTG'], ['more', t('المزيد', 'More')]];
 const nav = () => `<nav>${navItems().map(([k, l]) => `<button class="${k === st.tab ? 'on' : ''}" data-act="tab" data-v="${k}"${k === st.tab ? ' aria-current="page"' : ''}><span class="pill">${svg(k)}</span>${l}</button>`).join('')}</nav>`;
-const sheet = (color, body) => `<div class="scrim" data-act="sheetClose" aria-hidden="true"></div><div class="sheet" role="dialog" aria-modal="true" style="border-top-color:var(--${color})"><div class="grab"></div>${body}</div>`;
+const sheet = (color, body) => `<div class="scrim" data-act="sheetClose" aria-hidden="true"></div><div class="sheet" role="dialog" aria-modal="true" tabindex="-1" style="border-top-color:var(--${color})"><div class="grab"></div>${body}</div>`;
 const spinner = text => `<div class="banner plain" role="status"><span class="spin"></span><div class="body note" style="color:var(--text)">${text}</div></div>`;
 const errBanner = code => `<div class="banner bad" role="alert">${svg('warn')}<div class="body"><div class="big" style="font-size:14px">${errText(code)}</div></div></div>`;
 const backupDate = name => {
@@ -614,6 +614,8 @@ function render() {
   if (m) m.scrollTop = scroll;
   const sh = root.querySelector('.sheet');
   if (sh) sh.scrollTop = sheetScroll;
+  // A sheet that has just opened takes the focus, so a screen reader or a keyboard starts inside it.
+  if (sh && !sheetEl && sh.focus) sh.focus();
   // A re-render (a toast, a step) keeps what was typed on the warning sheet.
   const typedNew = root.querySelector('[data-in=typed]');
   if (typedNew && typed != null) {
