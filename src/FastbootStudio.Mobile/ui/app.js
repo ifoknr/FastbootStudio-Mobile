@@ -50,6 +50,8 @@ const ic = {
   refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
   power: '<path d="M12 3v9"/><path d="M6.3 7.5a8 8 0 1 0 11.4 0"/>',
 };
+// The cookie shape behind an icon (index.html holds the shape itself).
+const CK = '<svg class="ck" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><use href="#cookie" xlink:href="#cookie"/></svg>';
 const svg = k => `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ic[k]}</svg>`;
 
 // ---------------------------------------------------------------- state
@@ -89,7 +91,7 @@ const chip = (kind, text) => `<span class="chip ${kind || ''}">${text}</span>`;
 const LEVEL = { ok: ['ok', '✓'], notice: ['info', '!'], warn: ['warn', '!'], block: ['bad', '✗'] };
 const navItems = () => [['device', t('الجهاز', 'Device')], ['flash', t('التفليش', 'Flash')], ['backup', t('النسخ', 'Backups')], ['otg', 'OTG'], ['more', t('المزيد', 'More')]];
 const nav = () => `<nav>${navItems().map(([k, l]) => `<button class="${k === st.tab ? 'on' : ''}" data-act="tab" data-v="${k}"${k === st.tab ? ' aria-current="page"' : ''}><span class="pill">${svg(k)}</span>${l}</button>`).join('')}</nav>`;
-const sheet = (color, body) => `<div class="scrim" data-act="sheetClose" aria-hidden="true"></div><div class="sheet" role="dialog" aria-modal="true" tabindex="-1" style="border-top-color:var(--${color})"><div class="grab"></div>${body}</div>`;
+const sheet = (color, body) => `<div class="scrim" data-act="sheetClose" aria-hidden="true"></div><div class="sheet" role="dialog" aria-modal="true" tabindex="-1" style="--tone:var(--${color})"><div class="grab"></div>${body}</div>`;
 const spinner = text => `<div class="banner plain" role="status"><span class="spin"></span><div class="body note" style="color:var(--text)">${text}</div></div>`;
 const errBanner = code => `<div class="banner bad" role="alert">${svg('warn')}<div class="body"><div class="big" style="font-size:14px">${errText(code)}</div></div></div>`;
 const backupDate = name => {
@@ -230,8 +232,8 @@ P.flash = () => {
   const flashable = f.check && f.check.check.canFlash;
   return top + `<main>
     <div><div class="label">${t('1. الملف', '1. The file')}</div>${src}
-      <div style="margin-top:${src ? 8 : 0}px;display:flex;flex-direction:column;gap:6px"><button class="opt" data-act="pickBackup" style="width:100%;text-align:start"><span class="oi">${svg('backup')}</span><div><b>${t('من النسخ الاحتياطية', 'From backups')}</b><small>${t('صورة من نسخة أخذها التطبيق لهذا الجوال', 'An image from a backup the app made of this phone')}</small></div><span class="chev" style="margin-inline-start:auto;color:var(--faint)">${A ? '‹' : '›'}</span></button>
-        <button class="opt" data-act="pickFile" style="width:100%;text-align:start"><span class="oi">${svg('file')}</span><div><b>${t('ملف IMG أو ZIP', 'An IMG or ZIP file')}</b><small>${t('من ملفات الجوال، ويتحقق منه قبل أي كتابة', 'From the phone’s files, checked before any write')}</small></div><span class="chev" style="margin-inline-start:auto;color:var(--faint)">${A ? '‹' : '›'}</span></button></div></div>
+      <div class="files" style="margin-top:${src ? 8 : 0}px"><button class="opt" data-act="pickBackup" style="width:100%;text-align:start"><span class="oi">${CK}${svg('backup')}</span><div><b>${t('من النسخ الاحتياطية', 'From backups')}</b><small>${t('صورة من نسخة أخذها التطبيق لهذا الجوال', 'An image from a backup the app made of this phone')}</small></div><span class="chev" style="margin-inline-start:auto;color:var(--faint)">${A ? '‹' : '›'}</span></button>
+        <button class="opt" data-act="pickFile" style="width:100%;text-align:start"><span class="oi">${CK}${svg('file')}</span><div><b>${t('ملف IMG أو ZIP', 'An IMG or ZIP file')}</b><small>${t('من ملفات الجوال، ويتحقق منه قبل أي كتابة', 'From the phone’s files, checked before any write')}</small></div><span class="chev" style="margin-inline-start:auto;color:var(--faint)">${A ? '‹' : '›'}</span></button></div></div>
     <div><div class="label">${t('2. القسم', '2. Partition')}</div>
       <div class="parts">${ALLOWED.map(b => `<button class="${f.base === b ? 'on' : ''}" data-act="base" data-v="${b}" aria-pressed="${f.base === b}" ${targets.includes(b) ? '' : 'disabled'}>${b}</button>`).join('')}</div></div>
     ${p.ab ? `<div><div class="label">${t('3. السلوت', '3. Slot')}</div>
@@ -291,11 +293,11 @@ P.running = () => {
   let marked = false;
   const stepHtml = steps.map(([label, small, done], i) => {
     let b = 'wait', mark = i + 1, side = '';
-    if (done) { b = 'ok'; mark = '✓'; side = chip('ok', '✓'); }
+    if (done) { b = 'ok'; mark = '✓'; }
     else if (!marked) {
       marked = true;
       if (r.state === 'running') { b = 'run'; mark = ''; if (r.kind === 'otg' && r.total && r.sent < r.total) side = chip('', L(Math.floor(r.sent * 100 / r.total) + '%')); }
-      else if (r.state === 'failed') { b = 'bad'; mark = '✗'; side = chip('bad', '✗'); }
+      else if (r.state === 'failed') { b = 'bad'; mark = '✗'; }
     }
     return `<div class="step"><span class="b ${b}">${mark}</span><div>${label}${small ? `<small>${small}</small>` : ''}</div>${side}</div>`;
   }).join('');
@@ -369,13 +371,13 @@ P.backup = () => {
   let items;
   if (!list) items = spinner(t('يقرا النسخ…', 'Reading the backups…'));
   else if (!list.length) items = `<div class="card"><div class="empty"><div class="c">${svg('backup')}</div><h3>${t('ما فيه نسخ للحين', 'No backups yet')}</h3><div class="note">${t('خذ نسخة قبل أي تفليش. نفس ترتيب برنامج الويندوز والإضافة.', 'Take one before any flash. The same layout as the Windows app and the Companion.')}</div></div></div>`;
-  else items = `<div class="card">${list.map(b => {
+  else items = `<div class="card list">${list.map(b => {
     const s = st.bk[b.name];
     const side = !b.mine ? chip('warn', t('جوال ثاني', 'Other phone'))
       : s === 'run' ? '<span class="spin"></span>' : s === 'ok' ? chip('ok', '✓ ' + t('مطابقة', 'Verified'))
       : s && s.failed ? chip('bad', '✗ ' + (A ? `${s.failed.length} ${s.failed.length === 1 ? 'ملف متغيّر' : 'ملفات متغيّرة'}` : `${s.failed.length} changed`)) : chip('', t('ما تحققت', 'Not checked'));
     const meta = b.mine ? `${imagesCount(b.files.length)} · ${LE(mib(b.kb * 1024))} · ${setLabel(b.set)}${b.mode === 'companion' ? ' · ' + t('من الإضافة', 'Companion') : ''}` : t(`${LE(b.model || '?')} · ما تنفلش هنا`, `${esc(b.model || '?')} · not flashable here`);
-    return `<button class="bk${st.bkOpen === b.name ? ' open' : ''}" data-act="bkOpen" data-v="${esc(b.name)}" aria-expanded="${st.bkOpen === b.name}"><div class="n">${esc(b.name)}</div><div class="s">${side}</div><div class="m">${meta}</div></button>`;
+    return `<button class="bk${st.bkOpen === b.name ? ' open' : ''}" data-act="bkOpen" data-v="${esc(b.name)}" aria-expanded="${st.bkOpen === b.name}"><div class="n">${esc(b.name).replace(/_/g, '_<wbr>')}</div><div class="s">${side}</div><div class="m">${meta}</div></button>`;
   }).join('')}</div>`;
   const open = list && list.find(b => b.name === st.bkOpen);
   let detail = '';
@@ -391,7 +393,7 @@ P.backup = () => {
   return top + `<main>
     <div class="row2"><button class="btn primary" data-act="bkNew"><span>${t('نسخة جديدة', 'New backup')}</span></button><button class="btn" data-act="bkVerifyAll" ${list && list.some(b => b.mine) ? '' : 'disabled'}><span>${t('تحقق من الكل', 'Verify all')}</span></button></div>
     ${items}${detail}
-  </main><button class="fab" data-act="bkNew" aria-label="${t('نسخة جديدة', 'New backup')}">+</button>` + nav();
+  </main>` + nav();
 };
 
 P.otg = () => {
@@ -459,9 +461,9 @@ P.settings = () => {
   const tog = (key, b, small) => `<button class="setrow" data-act="toggle" data-k="${key}" role="switch" aria-checked="${!!s[key]}"><div class="tx"><b>${b}</b><small>${small}</small></div><span class="toggle${s[key] ? ' on' : ''}"></span></button>`;
   return head(t('الإعدادات', 'Settings'), t('المظهر واللغة والأمان', 'Appearance, language and safety'), '', true) + `<main>
     <div class="card"><h2>${t('المظهر', 'Appearance')}</h2>
-      ${[['auto', 'device', t('تلقائي', 'Auto'), t('مثل الجوال: داكن بالليل وفاتح بالنهار', 'Like the phone: dark at night, light by day')], ['dark', 'about', t('داكن', 'Dark'), t('الألوان المطفية، مريحة للعين', 'Soft muted colours, easy on the eyes')], ['light', 'power', t('فاتح', 'Light'), t('خلفية فاتحة وواضحة', 'A bright, clear background')]].map(([v, i, b, sm]) => `<button class="opt${s.theme === v ? ' on' : ''}" style="width:100%;text-align:start" data-act="set" data-k="theme" data-v="${v}"><span class="oi">${svg(i)}</span><div><b>${b}</b><small>${sm}</small></div><span class="r"></span></button>`).join('<div style="height:6px"></div>')}
+      ${[['auto', 'device', t('تلقائي', 'Auto'), t('مثل الجوال: داكن بالليل وفاتح بالنهار', 'Like the phone: dark at night, light by day')], ['dark', 'about', t('داكن', 'Dark'), t('الألوان المطفية، مريحة للعين', 'Soft muted colours, easy on the eyes')], ['light', 'power', t('فاتح', 'Light'), t('خلفية فاتحة وواضحة', 'A bright, clear background')]].map(([v, i, b, sm]) => `<button class="opt${s.theme === v ? ' on' : ''}" style="width:100%;text-align:start" data-act="set" data-k="theme" data-v="${v}"><span class="oi">${CK}${svg(i)}</span><div><b>${b}</b><small>${sm}</small></div><span class="r"></span></button>`).join('<div style="height:8px"></div>')}
       <div class="label" style="margin-top:14px">${t('حجم الخط', 'Text size')}</div>
-      <div class="seg size">${[['s', t('صغير', 'Small'), 12], ['m', t('عادي', 'Normal'), 14], ['l', t('كبير', 'Large'), 16], ['xl', t('أكبر', 'Larger'), 18]].map(([v, b, px]) => `<button class="${(s.textSize || 'm') === v ? 'on' : ''}" data-act="set" data-k="textSize" data-v="${v}"><b style="font-size:${px}px">${b}</b></button>`).join('')}</div>
+      <div class="seg size">${[['s', t('صغير', 'Small'), 12], ['m', t('عادي', 'Normal'), 13.5], ['l', t('كبير', 'Large'), 15], ['xl', t('أكبر', 'Larger'), 16.5]].map(([v, b, px]) => `<button class="${(s.textSize || 'm') === v ? 'on' : ''}" data-act="set" data-k="textSize" data-v="${v}"><b style="font-size:${px}px">${b}</b></button>`).join('')}</div>
       <div class="label" style="margin-top:12px">${t('اللغة', 'Language')}</div>
       ${seg('lang', [['ar', 'العربية'], ['en', 'English']])}</div>
     <div class="card"><h2>${t('الأمان', 'Safety')}</h2>
@@ -490,13 +492,13 @@ P.logs = () => {
 };
 
 P.about = () => head(t('حول', 'About'), 'Fastboot Studio Mobile', '', true) + `<main>
-  <div class="hero"><div class="cookie"><img class="ic-dark" src="icon-themed.png" alt=""><img class="ic-light" src="icon-light.png" alt=""></div>
+  <div class="hero"><div class="cookie">${CK}<img class="ic-dark" src="icon-themed.png" alt=""><img class="ic-light" src="icon-light.png" alt=""></div>
     <h3 class="appname"><img class="an an-dark" src="appname-dark.svg" alt="Fastboot Studio Mobile"><img class="an an-light" src="appname-light.svg" alt="Fastboot Studio Mobile"></h3>
     <div class="tag">${t('فلّش وخذ نسخة وروّت جوالك من الجوال نفسه، بأمان.', 'Flash, back up and root from the phone itself, safely.')}</div>
     <div class="tags">${chip('', 'v' + esc(st.version))}${chip('', 'MIT')}${chip('', t('مجاني ومفتوح المصدر', 'Free & open source'))}</div>
     <button class="btn primary sm" style="width:auto;margin-top:6px" data-act="updCheck"><span>${t('افحص التحديثات', 'Check for updates')}</span></button></div>
-  <div class="card"><div class="dev"><img class="tile" src="ifoknr-tile.svg" alt=""><div class="who"><img class="sig sig-dark" src="ifoknr-dark.svg" alt="IFOKNR"><img class="sig sig-light" src="ifoknr-light.svg" alt="IFOKNR"><svg class="swoosh" viewBox="0 0 220 16" preserveAspectRatio="none"><defs><linearGradient id="sw"><stop offset="0" stop-color="#cabeff"/><stop offset="1" stop-color="#edb8cc" stop-opacity=".2"/></linearGradient></defs><path d="M4 11 C 60 2, 120 2, 216 7" fill="none" stroke="url(#sw)" stroke-width="2.4" stroke-linecap="round"/></svg><div class="role">${t('المطوّر', 'Developer')}</div></div></div>
-  <div class="card list" style="padding:0">
+  <div class="card list"><div class="dev"><img class="tile" src="ifoknr-tile.svg" alt=""><div class="who"><img class="sig sig-dark" src="ifoknr-dark.svg" alt="IFOKNR"><img class="sig sig-light" src="ifoknr-light.svg" alt="IFOKNR"><svg class="swoosh" viewBox="0 0 220 16" preserveAspectRatio="none"><defs><linearGradient id="sw"><stop offset="0" stop-color="#cabeff"/><stop offset="1" stop-color="#edb8cc" stop-opacity=".2"/></linearGradient></defs><path d="M4 11 C 60 2, 120 2, 216 7" fill="none" stroke="url(#sw)" stroke-width="2.4" stroke-linecap="round"/></svg><div class="role">${t('المطوّر', 'Developer')}</div></div></div>
+  <div class="sub">
     ${[['https://t.me/IFOKNR1', 'tg', 'Telegram', '@IFOKNR1'], ['https://t.me/BeNeXTBrO', 'tg', t('قروب التيليجرام', 'Telegram group'), 't.me/BeNeXTBrO'], ['https://github.com/ifoknr', 'gh', 'GitHub', 'github.com/ifoknr'], ['https://ifoknr.com', 'pc', t('كل أدواتي', 'All my tools'), 'ifoknr.com']].map(([u, i, b, s]) => `<button class="it" data-act="link" data-v="${u}"><div class="ic">${svg(i)}</div><div><b>${b}</b><small class="ltr">${s}</small></div><span class="chev">${A ? '‹' : '›'}</span></button>`).join('')}
   </div></div>
   <div class="card"><h2>${t('مبني على', 'Built on')}</h2><div class="note" style="color:var(--text)">${t('مكتبة Fastboot Studio، المبنية على Fastboot Enhance من LibXZR (رخصة MIT).', 'The Fastboot Studio library, based on Fastboot Enhance by LibXZR (MIT License).')}</div>

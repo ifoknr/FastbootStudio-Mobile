@@ -6,6 +6,9 @@
 @font-face { font-family: Kufi; src: url(fonts/NotoKufiArabic-Medium.ttf); font-weight: 500; }
 @font-face { font-family: Kufi; src: url(fonts/NotoKufiArabic-SemiBold.ttf); font-weight: 600; }
 @font-face { font-family: Kufi; src: url(fonts/NotoKufiArabic-Bold.ttf); font-weight: 700; }
+/* Roboto Mono (OFL, fonts/RobotoMono-OFL.txt) for serials, partition names, hashes and the log: the same letters on every phone. */
+@font-face { font-family: "Roboto Mono"; src: url(fonts/RobotoMono-Regular.woff2) format("woff2"); font-weight: 400; }
+@font-face { font-family: "Roboto Mono"; src: url(fonts/RobotoMono-Medium.woff2) format("woff2"); font-weight: 500; }
 
 /* Spacing by margins where an older WebView (Chrome < 84) has no flex gap. */
 /* Material 3, violet: the tonal palettes of the Fastboot Studio design (seed #605690), dark and light.
@@ -14,10 +17,9 @@
    accent = primary, asoft = primaryContainer, sc = secondaryContainer (selections, the nav indicator).
    --k is the text size from Settings. */
 :root {
-  --cookie: url(cookie.svg);
   --k: 1;
   --bg:#2a2a2c; --rail:#2a2a2c; --well:#3d3d40; --surface:#353537; --raised:#47474b; --line:#4a4a4f;
-  --text:#e5e3e8; --dim:#c4c4cb; --faint:#8f8f95; --accent:#a8c4ff; --ink:#152c5e; --asoft:#343b50; --onasoft:#dce3ff; --aline:#4e5878;
+  --text:#e5e3e8; --dim:#c4c4cb; --faint:#abaab2; --accent:#a8c4ff; --ink:#152c5e; --asoft:#343b50; --onasoft:#dce3ff; --aline:#4e5878;
   --sc:#3f455a; --onsc:#dde1f9; --tertiary:#e3bce6; --tc:#433a47; --ontc:#f0dcf2; --inv:#e5e3e8; --oninv:#303032; --sel:#414a6b;
   --warn:#f0b27a; --wsoft:#4a3a2c; --wline:#7a5a3c; --danger:#ffb4ab; --dsoft:#6e2a27; --dline:#8c3a3a; --ok:#9bd7a8;
   --notice:#e9c77a; --nsoft:#46402c; --nline:#6d5f34; --scrim: rgba(10,10,12,.66);
@@ -25,7 +27,7 @@
 }
 :root[data-theme=light] {
   --bg:#faf9fd; --rail:#faf9fd; --well:#e6e4ea; --surface:#efedf1; --raised:#dcdae0; --line:#c6c5cd;
-  --text:#1b1b1f; --dim:#46464f; --faint:#77767e; --accent:#2e4d9d; --ink:#ffffff; --asoft:#dae2ff; --onasoft:#1b2f6b; --aline:#a8c4ff;
+  --text:#1b1b1f; --dim:#46464f; --faint:#626169; --accent:#2e4d9d; --ink:#ffffff; --asoft:#dae2ff; --onasoft:#1b2f6b; --aline:#a8c4ff;
   --sc:#dde1f9; --onsc:#2b3042; --tertiary:#7a4e7e; --tc:#f6dbf8; --ontc:#4f2f53; --inv:#303032; --oninv:#f3f0f4; --sel:#d6dcf5;
   --warn:#8a4b12; --wsoft:#ffeadb; --wline:#efc09b; --danger:#ba1a1a; --dsoft:#ffdad6; --dline:#f0aba4; --ok:#1f7a3a;
   --notice:#7a5900; --nsoft:#ffefc8; --nline:#e9c77a; --scrim: rgba(27,27,31,.42);
@@ -288,7 +290,7 @@ nav button.on .pill { background: var(--sc); }
 .sect { font-size: calc(17px * var(--k)); font-weight: 500; margin: 6px 4px -2px; }
 /* About */
 .cookie { width: 120px; height: 120px; display: grid; place-items: center; position: relative; margin: 2px auto 4px; }
-.cookie::before { content: ''; position: absolute; inset: 0; background: var(--aline); -webkit-mask: var(--cookie) center/100% 100% no-repeat; }
+.cookie::before { content: ''; position: absolute; inset: 0; background: var(--aline); }
 .cookie img { position: relative; width: 78px; height: 78px; border-radius: 0; box-shadow: none; }
 .hero { background: var(--sc); color: var(--onsc); border-radius: 32px; padding: 22px 18px 18px; }
 .hero .tags .chip { color: var(--onsc); border-color: color-mix(in srgb, var(--onsc) 35%, transparent); }
@@ -296,7 +298,7 @@ nav button.on .pill { background: var(--sc); }
 .dev .tile { width: 56px; height: 56px; }
 .opt { display: flex; gap: 14px; align-items: center; padding: 14px; border-radius: 24px; background: var(--well); }
 .opt.on { background: var(--sel); }
-.opt .oi { width: 46px; height: 46px; flex: none; display: grid; place-items: center; background: var(--raised); color: var(--dim); -webkit-mask: var(--cookie) center/100% 100% no-repeat; }
+.opt .oi { width: 46px; height: 46px; flex: none; display: grid; place-items: center; background: var(--raised); color: var(--dim); }
 .opt.on .oi { background: var(--accent); color: var(--ink); }
 .opt .oi svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; }
 .opt b { display: block; font-weight: 600; font-size: calc(14.5px * var(--k)); }
@@ -332,3 +334,164 @@ button.toggle::before { content: ""; position: absolute; inset: -11px -2px; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
   .progress.busy div { position: static; width: 100% !important; opacity: .45; }
 }
+
+/* ===== One system for shape, spacing, depth and states =====
+   Everything above still gives each part its colours and layout; this section is the last word on how parts are
+   shaped, so the same kind of thing looks the same on every page.
+   Spacing: 4, 8, 12, 16, 24. Radius: 8 (chips), 12 (fields, partition buttons, tiles, icon wells), 16 (rows),
+   24 (cards and banners), 28 (sheets, the About hero), full (buttons, the nav indicator). A row inside a card
+   sits 8px in, so its 16px corner runs parallel to the card's 24px one (24 - 8 = 16).
+   Depth: one shadow (--shadow) for what floats (sheet, snackbar, the + button). Pressed: one veil (--press).
+   Lines are whole pixels (1px or 2px), never 1.5px, so they stay sharp on every screen density. */
+:root {
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 24px;
+  --r-xs: 8px; --r-sm: 12px; --r-md: 16px; --r-lg: 24px; --r-xl: 28px; --r-full: 999px;
+  --shadow: 0 1px 3px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.32);
+  --press: rgba(255,255,255,.1);
+  --tone: var(--line);
+  /* The edge of something to press (a partition button, "Change", a step not reached): 3:1 against the page, where --line is only a divider. */
+  --outline: #86858d;
+}
+:root[data-theme=light] { --shadow: 0 1px 3px rgba(27,27,31,.14), 0 8px 24px rgba(27,27,31,.16); --press: rgba(27,27,31,.08); --outline: #7c7b83; }
+
+/* Text: smooth edges, digits of one width so numbers that change do not jump, and room for Arabic marks. */
+html, body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; font-variant-numeric: tabular-nums; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+[dir=rtl] body { line-height: 1.6; }
+img { image-rendering: auto; }
+
+/* Icons: the stroke is 1.5px (2px on the large banner icons) whatever size the icon is drawn at. */
+svg[viewBox="0 0 24 24"] * { vector-effect: non-scaling-stroke; }
+.btn svg, .file .ico svg, .list .it .ic svg, .usb .ph svg, .opt .oi svg, .tile2 svg, nav svg, .empty .c svg { stroke-width: 1.5px; stroke-linecap: round; stroke-linejoin: round; }
+.banner > svg { stroke-width: 2px; }
+.btn svg, .file .ico svg, .list .it .ic svg, .opt .oi svg:not(.ck) { width: 20px; height: 20px; }
+nav svg { width: 22px; height: 22px; }
+
+/* Page */
+header { padding: 12px 16px 8px; }
+header { padding-top: calc(12px + env(safe-area-inset-top, 0px)); padding-left: calc(16px + env(safe-area-inset-left, 0px)); padding-right: calc(16px + env(safe-area-inset-right, 0px)); }
+header h1 { line-height: 1.25; }
+[dir=rtl] header h1 { line-height: 1.5; }
+header p { white-space: normal; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-height: 1.35; }
+header .back { width: 40px; height: 40px; border-radius: var(--r-full); line-height: 1; }
+/* A grid, not a flex column: its gap works on every WebView. */
+main { display: grid; grid-template-columns: minmax(0, 1fr); grid-auto-rows: max-content; align-content: start; gap: var(--s3); padding: var(--s2) var(--s4) var(--s5); }
+main { padding-left: calc(16px + env(safe-area-inset-left, 0px)); padding-right: calc(16px + env(safe-area-inset-right, 0px)); }
+main.hasfab { padding-bottom: 96px; }
+.sect { margin: var(--s2) var(--s1) 0; line-height: 1.3; }
+.label { margin: var(--s1) var(--s1) var(--s1); }
+
+/* Surfaces */
+.card { border-radius: var(--r-lg); padding: var(--s4); }
+.card h2 { margin-bottom: var(--s3); line-height: 1.3; }
+.banner { border-radius: var(--r-lg); padding: var(--s4); }
+.banner.bad { box-shadow: inset 0 0 0 2px var(--danger); }
+.banner .vrow small, .banner .cmp .k, .bk.open .m, .seg .on, .opt.on small { color: var(--dim); }
+.banner.ok .vrow small { color: var(--onasoft); }
+.hero { border-radius: var(--r-xl); display: grid; justify-items: center; gap: var(--s2); padding: var(--s5) var(--s4) var(--s4); }
+.hero .tag { opacity: 1; }
+
+/* A group of rows: the card is the frame, 8px in; each row is its own shape. */
+.card.list { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s1); padding: var(--s2); background: var(--surface); }
+.card.list .sub { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s1); }
+.list .it { border-radius: var(--r-md); padding: 10px var(--s3); min-height: 60px; }
+.list .it .ic { width: 40px; height: 40px; border-radius: var(--r-full); }
+.list .dev { padding: var(--s2) var(--s2) var(--s3); }
+.files { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s2); }
+.file { border-radius: var(--r-md); padding: 10px var(--s3); min-height: 60px; }
+.file .ico { width: 40px; height: 40px; border-radius: var(--r-sm); }
+.bk { border-radius: var(--r-md); padding: var(--s3); margin-top: 0; gap: 2px var(--s3); }
+/* The whole name shows: its end is the date, the part that tells two backups apart. */
+.bk .n { white-space: normal; overflow-wrap: anywhere; }
+.opt { border-radius: var(--r-md); padding: var(--s3); min-height: 68px; }
+.opt .oi { width: 44px; height: 44px; position: relative; background: none; -webkit-mask: none; mask: none; color: var(--dim); }
+.opt .oi .ck, .cookie .ck { position: absolute; left: 0; top: 0; width: 100%; height: 100%; fill: var(--raised); stroke: none; }
+.opt .oi svg:not(.ck) { position: relative; }
+.opt.on .oi { background: none; color: var(--ink); }
+.opt.on .oi .ck { fill: var(--accent); }
+.cookie::before { content: none; }
+.cookie .ck { fill: var(--aline); }
+.usb .ph { width: 44px; height: 44px; border-radius: var(--r-sm); }
+.tiles { grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: var(--s2); }
+.tile2 { border-radius: var(--r-sm); padding: 10px var(--s3); min-height: 44px; }
+.tile2 > div { flex-wrap: wrap; }
+.tile2 b { overflow: visible; text-overflow: clip; }
+.empty .c { border-radius: var(--r-lg); }
+
+/* Buttons: one height per size, the label never clipped (it wraps instead), a veil when pressed. */
+.btn { min-height: 48px; border-radius: var(--r-full); padding: var(--s2) 20px; line-height: 1.3; }
+.btn.sm { min-height: 40px; border-radius: var(--r-full); padding: 6px var(--s4); }
+.row2 .btn, .row3 .btn { padding-left: var(--s3); padding-right: var(--s3); }
+.btn span { min-width: 0; overflow-wrap: anywhere; }
+[dir=rtl] .btn { line-height: 1.5; }
+.btn:disabled, .btn.off { opacity: .4; }
+.btn:active, .file:active, .opt:active, .bk:active, .list .it:active, .seg button:active, .parts button:active, .setrow:active, button.chip:active, header .back:active, .fab:active, nav button:active .pill {
+  background-image: linear-gradient(var(--press), var(--press));
+}
+.btn:disabled:active, .parts button:disabled:active { background-image: none; }
+
+/* Chips */
+.chip { border-radius: var(--r-xs); padding: 2px 10px; min-height: 24px; line-height: 1.5; }
+[dir=rtl] .chip { line-height: 1.7; }
+
+/* Choices */
+.seg { gap: var(--s2); }
+.seg button { border-radius: var(--r-md); padding: 10px 6px; min-height: 48px; }
+.seg .on { box-shadow: inset 0 0 0 2px var(--accent); }
+.seg.size button { padding-left: 2px; padding-right: 2px; white-space: nowrap; }
+/* Spaced by margins: a wrapping row has no gap on an older WebView. */
+.parts { gap: 0; margin: -4px; }
+button.chip { border-color: var(--outline); }
+button.chip.ok, button.chip.warn, button.chip.bad, button.chip.info { border-color: transparent; }
+.parts button { margin: 4px; border: 1px solid var(--outline); box-shadow: none; border-radius: var(--r-sm); padding: 7px var(--s3); min-height: 36px; line-height: 1.3; }
+.parts .on { border-color: transparent; }
+/* Not on this phone: dashed and dim, but still readable (no line through the name). */
+.parts button:disabled { opacity: .5; text-decoration: none; border-style: dashed; }
+
+/* Fields */
+.typed, .input { border-radius: var(--r-sm); height: 48px; padding: 0 var(--s4); }
+.typed:focus, .input:focus { padding: 0 15px; }
+
+/* Steps of a running job */
+.steps { display: grid; gap: 0; }
+.step { padding: 10px 0; }
+.step .b { width: 24px; height: 24px; line-height: 1; }
+.step .b.wait { border: 1px solid var(--outline); }
+.progress { height: 8px; border-radius: var(--r-full); }
+.progress div { border-radius: var(--r-full); }
+.spin { width: 20px; height: 20px; }
+
+/* Switch: plain left and right, which every WebView places the same way. */
+.toggle::after { inset-inline-start: auto; inset-inline-end: auto; left: 6px; right: auto; transition: left .15s, right .15s, width .15s, height .15s, top .15s, background-color .15s; }
+.toggle.on::after { inset-inline-start: auto; inset-inline-end: auto; left: auto; right: 3px; }
+[dir=rtl] .toggle::after { left: auto; right: 6px; }
+[dir=rtl] .toggle.on::after { right: auto; left: 3px; }
+.setrow { padding: 10px 0; min-height: 56px; }
+
+/* What floats: the sheet, the snackbar, the + button. The sheet's colour (calm, careful, refused) is its handle. */
+.scrim { top: 0; right: 0; bottom: 0; left: 0; }
+.sheet { display: grid; grid-template-columns: minmax(0, 1fr); grid-auto-rows: max-content; gap: var(--s3); border-top: 0; border-radius: var(--r-xl) var(--r-xl) 0 0; padding: var(--s2) var(--s4) var(--s5); box-shadow: var(--shadow); }
+.sheet { padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px)); }
+.grab { width: 40px; height: 4px; border-radius: var(--r-full); background: var(--tone); opacity: 1; margin: var(--s1) auto var(--s2); }
+.toast { border-radius: var(--r-sm); box-shadow: var(--shadow); padding: var(--s3) var(--s4); bottom: 88px; }
+.fab { width: 56px; height: 56px; border-radius: var(--r-md); box-shadow: var(--shadow); bottom: 88px; line-height: 1; }
+[dir=rtl] .fab { right: auto; left: 16px; }
+[dir=ltr] .fab { left: auto; right: 16px; }
+.hero > img, .dev .tile { box-shadow: var(--shadow); }
+
+/* Navigation bar: the indicator never wider than its column, and clear of the gesture bar. */
+nav { padding: var(--s2) var(--s1) var(--s2); }
+nav { padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+nav button { gap: var(--s1); min-height: 56px; justify-content: center; min-width: 0; line-height: 1.3; }
+nav button .pill { width: 56px; max-width: 100%; height: 32px; border-radius: var(--r-full); }
+[dir=rtl] nav button { line-height: 1.5; }
+
+/* An older WebView (before Chrome 87, which also lacks "inset") has no gap between the parts of a flex row: margins there. */
+@supports not (inset: 0) {
+  header > * + *, .file > * + *, .banner > * + *, .usb > * + *, .dev > * + *, .opt > * + *, .setrow > * + *, .tile2 > * + * { -webkit-margin-start: 12px; margin-inline-start: 12px; }
+  .tags .chip { margin: 3px; }
+  button.chip::after, header .back::after, .btn.sm::after, .parts button::after, button.toggle::before { content: none; }
+}
+
+/* A button on a banner of its own colour would have no shape: there it is filled. */
+.banner.info .btn.noticeb { background: var(--notice); color: var(--bg); }
+.banner.warn .btn.warnb { background: var(--warn); color: var(--bg); }
