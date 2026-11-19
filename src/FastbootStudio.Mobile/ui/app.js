@@ -49,6 +49,8 @@ const ic = {
   lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
   power: '<path d="M12 3v9"/><path d="M6.3 7.5a8 8 0 1 0 11.4 0"/>',
+  moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
 };
 // The cookie shape behind an icon (index.html holds the shape itself).
 const CK = '<svg class="ck" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><use href="#cookie" xlink:href="#cookie"/></svg>';
@@ -462,7 +464,7 @@ P.settings = () => {
   const tog = (key, b, small) => `<button class="setrow" data-act="toggle" data-k="${key}" role="switch" aria-checked="${!!s[key]}"><div class="tx"><b>${b}</b><small>${small}</small></div><span class="toggle${s[key] ? ' on' : ''}"></span></button>`;
   return head(t('الإعدادات', 'Settings'), t('المظهر واللغة والأمان', 'Appearance, language and safety'), '', true) + `<main>
     <div class="card"><h2>${t('المظهر', 'Appearance')}</h2>
-      ${[['auto', 'device', t('تلقائي', 'Auto'), t('مثل الجوال: داكن بالليل وفاتح بالنهار', 'Like the phone: dark at night, light by day')], ['dark', 'about', t('داكن', 'Dark'), t('الألوان المطفية، مريحة للعين', 'Soft muted colours, easy on the eyes')], ['light', 'power', t('فاتح', 'Light'), t('خلفية فاتحة وواضحة', 'A bright, clear background')]].map(([v, i, b, sm]) => `<button class="opt${s.theme === v ? ' on' : ''}" style="width:100%;text-align:start" data-act="set" data-k="theme" data-v="${v}"><span class="oi">${CK}${svg(i)}</span><div><b>${b}</b><small>${sm}</small></div><span class="r"></span></button>`).join('<div style="height:8px"></div>')}
+      ${[['auto', 'device', t('تلقائي', 'Auto'), t('مثل الجوال: داكن بالليل وفاتح بالنهار', 'Like the phone: dark at night, light by day')], ['dark', 'moon', t('داكن', 'Dark'), t('الألوان المطفية، مريحة للعين', 'Soft muted colours, easy on the eyes')], ['light', 'sun', t('فاتح', 'Light'), t('خلفية فاتحة وواضحة', 'A bright, clear background')]].map(([v, i, b, sm]) => `<button class="opt${s.theme === v ? ' on' : ''}" style="width:100%;text-align:start" data-act="set" data-k="theme" data-v="${v}"><span class="oi">${CK}${svg(i)}</span><div><b>${b}</b><small>${sm}</small></div><span class="r"></span></button>`).join('<div style="height:8px"></div>')}
       <div class="label" style="margin-top:14px">${t('حجم الخط', 'Text size')}</div>
       <div class="seg size">${[['s', t('صغير', 'Small'), 12], ['m', t('عادي', 'Normal'), 13.5], ['l', t('كبير', 'Large'), 15], ['xl', t('أكبر', 'Larger'), 16.5]].map(([v, b, px]) => `<button class="${(s.textSize || 'm') === v ? 'on' : ''}" data-act="set" data-k="textSize" data-v="${v}"><b style="font-size:${px}px">${b}</b></button>`).join('')}</div>
       <div class="label" style="margin-top:12px">${t('اللغة', 'Language')}</div>
