@@ -121,11 +121,14 @@ namespace FastbootStudio.Mobile.Native
         /// Copies one image of a backup, with its SHA256SUMS and backup-info.txt, into the app's
         /// cache, so the check and the flash both use that copy and nothing can change in between.
         /// </summary>
-        public BackupFolder Fetch(string name, string file)
+        /// <param name="inUse">The file a running flash reads, if any: its folder is not replaced under it.</param>
+        public BackupFolder Fetch(string name, string file, string inUse = null)
         {
             if (!BackupListing.IsName(name) || string.IsNullOrEmpty(file) || file.Contains('/') || file.StartsWith("."))
                 return null;
             string local = Path.Combine(CacheDir, "backup", name);
+            if (inUse != null && inUse.StartsWith(local + "/", StringComparison.Ordinal))
+                throw new BridgeError("busy");
             if (Directory.Exists(local))
                 Directory.Delete(local, true);
             string remote = RootFlasher.BackupRoot + "/" + name + "/";

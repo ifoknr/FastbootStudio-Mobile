@@ -75,6 +75,15 @@ namespace FastbootStudio.Mobile.Core.Tests
             Assert.Equal("0.9.0", UpdateCheck.Newest(List, "1.0.0").Version);
 
         [Fact]
+        public void A_single_release_follows_the_same_rule_as_the_list()
+        {
+            const string beta = "{\"tag_name\":\"v2.0.0-beta.1\",\"prerelease\":true}";
+            Assert.Null(UpdateCheck.Newest(beta, "1.0.0"));
+            Assert.Equal("2.0.0-beta.1", UpdateCheck.Newest(beta, "1.0.0-beta.1").Version);
+            Assert.Equal("1.0.1", UpdateCheck.Newest("{\"tag_name\":\"v1.0.1\"}", "1.0.0").Version);
+        }
+
+        [Fact]
         public void Drafts_never_count_and_an_empty_list_is_none()
         {
             Assert.Null(UpdateCheck.Newest("[{\"tag_name\":\"v9.0.0\",\"draft\":true}]", "1.0.0-beta.1"));

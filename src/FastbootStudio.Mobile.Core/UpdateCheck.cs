@@ -39,7 +39,11 @@ namespace FastbootStudio.Mobile.Core
                 using (JsonDocument doc = JsonDocument.Parse(json ?? ""))
                 {
                     if (doc.RootElement.ValueKind == JsonValueKind.Object)
-                        return Read(doc.RootElement);
+                    {
+                        // A single release instead of the list: the same rule, a release is never offered a beta.
+                        Release one = Read(doc.RootElement);
+                        return one != null && one.Prerelease && !beta ? null : one;
+                    }
                     if (doc.RootElement.ValueKind != JsonValueKind.Array)
                         return null;
                     Release best = null;

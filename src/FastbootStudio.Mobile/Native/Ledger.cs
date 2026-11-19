@@ -62,7 +62,12 @@ namespace FastbootStudio.Mobile.Native
             {
                 JsonObject all = Load();
                 if (all.Remove(backup))
-                    File.WriteAllText(path, all.ToJsonString());
+                {
+                    // Written beside and moved over, like Record: a crash never leaves half a record.
+                    string tmp = path + ".tmp";
+                    File.WriteAllText(tmp, all.ToJsonString());
+                    File.Move(tmp, path, true);
+                }
             }
         }
     }

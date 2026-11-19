@@ -21,13 +21,17 @@ namespace FastbootStudio.Mobile
     [Activity(Label = "@string/app_name", MainLauncher = true, Exported = true, Theme = "@style/AppTheme",
         LaunchMode = LaunchMode.SingleTask,
         ConfigurationChanges = ConfigChanges.Orientation | ConfigChanges.ScreenSize | ConfigChanges.ScreenLayout | ConfigChanges.SmallestScreenSize
-            | ConfigChanges.KeyboardHidden | ConfigChanges.Keyboard | ConfigChanges.UiMode | ConfigChanges.Density | ConfigChanges.Locale)]
+            | ConfigChanges.KeyboardHidden | ConfigChanges.Keyboard | ConfigChanges.UiMode | ConfigChanges.Density | ConfigChanges.Locale
+            // The page lays itself out and has its own language and text size: none of these needs a new activity,
+            // and a new one would drop the page in the middle of a flash.
+            | ConfigChanges.LayoutDirection | ConfigChanges.FontScale | ConfigChanges.Navigation | ConfigChanges.Touchscreen
+            | ConfigChanges.Mcc | ConfigChanges.Mnc | ConfigChanges.ColorMode | ConfigChanges.FontWeightAdjustment | ConfigChanges.GrammaticalGender)]
     [IntentFilter(new[] { UsbManager.ActionUsbDeviceAttached })]
     [MetaData(UsbManager.ActionUsbDeviceAttached, Resource = "@xml/usb_fastboot")]
     public class MainActivity : Activity
     {
         const string Page = "file:///android_asset/ui/index.html";
-        const int PickCode = 41, TreeCode = 42;
+        const int PickCode = 41, TreeCode = 42, SaveCode = 43;
 
         WebView web;
         Bridge bridge;
@@ -45,8 +49,10 @@ namespace FastbootStudio.Mobile
         {
             base.OnCreate(savedInstanceState);
             Settings settings = new Settings(this);
-            otg = new Otg(this);
+            otg = Otg.Shared(this);
             bridge = new Bridge(this, new Phone(this), settings, otg);
+            // From here the steps of a job still running from before reach this page, and the screen stays on for it.
+            Bridge.Attach(this);
 
             web = new WebView(this);
             web.SetBackgroundColor(Color.ParseColor(settings.Theme == "light" || (settings.Theme == "auto" && !SystemDark) ? "#FAF9FD" : "#2A2A2C"));
@@ -81,7 +87,25 @@ namespace FastbootStudio.Mobile
         protected override void OnDestroy()
         {
             try { UnregisterReceiver(receiver); } catch (Java.Lang.IllegalArgumentException) { }
-            otg?.Close();
+            Bridge.Detach(this);
+            // Nobody answers a picker any more: whoever waits for it gets "nothing picked".
+            pick?.TrySetResult(null);
+            pick = null;
+            // Closing waits for a flash still on the cable, so never on this thread; and when the
+            // activity is only being made again, the connection stays for the next one.
+            if (IsFinishing)
+            {
+                Otg closing = otg;
+                Task.Run(() => closing?.Close());
+            }
+            WebView w = web;
+            web = null;
+            if (w != null)
+            {
+                (w.Parent as ViewGroup)?.RemoveView(w);
+                w.RemoveJavascriptInterface("fbsNative");
+                w.Destroy();
+            }
             base.OnDestroy();
         }
 
@@ -174,7 +198,8 @@ namespace FastbootStudio.Mobile
 
         Task<Android.Net.Uri> StartPick(Intent intent, int code)
         {
-            TaskCompletionSource<Android.Net.Uri> tcs = new TaskCompletionSource<Android.Net.Uri>();
+            // The answer comes on the main thread; what waits for it (copying the picked file) must not run there.
+            TaskCompletionSource<Android.Net.Uri> tcs = new TaskCompletionSource<Android.Net.Uri>(TaskCreationOptions.RunContinuationsAsynchronously);
             RunOnUiThread(() =>
             {
                 pick?.TrySetResult(null);
@@ -188,8 +213,34 @@ namespace FastbootStudio.Mobile
         protected override void OnActivityResult(int requestCode, Result resultCode, Intent data)
         {
             base.OnActivityResult(requestCode, resultCode, data);
-            if (requestCode == PickCode || requestCode == TreeCode)
+            if (requestCode == PickCode || requestCode == TreeCode || requestCode == SaveCode)
                 pick?.TrySetResult(resultCode == Result.Ok ? data?.Data : null);
+        }
+
+        /// <summary>Asks where to save a text file (the system's own "save" page) and writes it there. False when cancelled or not written.</summary>
+        public async Task<bool> SaveText(string name, string text)
+        {
+            Intent intent = new Intent(Intent.ActionCreateDocument);
+            intent.AddCategory(Intent.CategoryOpenable);
+            intent.SetType("text/plain");
+            intent.PutExtra(Intent.ExtraTitle, name);
+            Android.Net.Uri uri = await StartPick(intent, SaveCode);
+            if (uri == null)
+                return false;
+            try
+            {
+                using (Stream output = ContentResolver.OpenOutputStream(uri))
+                {
+                    byte[] bytes = System.Text.Encoding.UTF8.GetBytes(text ?? "");
+                    output.Write(bytes, 0, bytes.Length);
+                }
+                return true;
+            }
+            catch (Exception e)
+            {
+                Native.Log.Add("save " + name + " failed: " + e.Message);
+                return false;
+            }
         }
 
         public string DisplayName(Android.Net.Uri uri)
@@ -294,8 +345,8 @@ namespace FastbootStudio.Mobile
 #pragma warning disable CA1422
                             : (UsbDevice)intent.GetParcelableExtra(UsbManager.ExtraDevice);
 #pragma warning restore CA1422
-                        activity.otg.Detached(gone);
-                        activity.bridge.Event("otg", new System.Text.Json.Nodes.JsonObject { ["attached"] = false });
+                        // The page hears of it once the connection is closed, so its next scan shows no open phone.
+                        activity.otg.Detached(gone, () => activity.bridge.Event("otg", new System.Text.Json.Nodes.JsonObject { ["attached"] = false }));
                         break;
                     case UsbManager.ActionUsbDeviceAttached:
                         activity.bridge.Event("otg", new System.Text.Json.Nodes.JsonObject { ["attached"] = true });

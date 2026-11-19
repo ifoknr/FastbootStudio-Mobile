@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json.Nodes;
+using System.Threading;
 using System.Threading.Tasks;
 using Android.App;
 using Android.Content;
@@ -22,7 +23,7 @@ namespace FastbootStudio.Mobile.Native
     {
         public const string PermissionAction = "com.ifoknr.fastbootstudio.mobile.USB_PERMISSION";
 
-        readonly Activity activity;
+        readonly Context activity;
         readonly UsbManager usb;
         readonly object gate = new object();
         TaskCompletionSource<bool> permission;
@@ -32,7 +33,25 @@ namespace FastbootStudio.Mobile.Native
         UsbInterface claimed;
         FastbootClient client;
 
-        public Otg(Activity activity)
+        // Read without the gate, which a flash holds from its first byte to the bootloader's answer:
+        // the open device's name, the send that can still be stopped, and whether the phone was unplugged.
+        volatile string openName;
+        volatile CancellationTokenSource sending;
+        volatile bool unplugged;
+
+        static Otg shared;
+
+        /// <summary>
+        /// One for the whole app: the connection and a flash running on it outlive the activity
+        /// when Android makes it again.
+        /// </summary>
+        public static Otg Shared(Context context)
+        {
+            lock (typeof(Otg))
+                return shared ??= new Otg(context.ApplicationContext ?? context);
+        }
+
+        public Otg(Context activity)
         {
             this.activity = activity;
             usb = (UsbManager)activity.GetSystemService(Context.UsbService);
@@ -79,7 +98,7 @@ namespace FastbootStudio.Mobile.Native
                 {
                     ["id"] = d.DeviceName, ["name"] = d.ProductName ?? "", ["maker"] = d.ManufacturerName ?? "",
                     ["vid"] = d.VendorId.ToString("x4"), ["pid"] = d.ProductId.ToString("x4"),
-                    ["permitted"] = usb.HasPermission(d), ["open"] = device != null && device.DeviceName == d.DeviceName,
+                    ["permitted"] = usb.HasPermission(d), ["open"] = openName != null && openName == d.DeviceName,
                 });
             }
             return list;
@@ -89,16 +108,46 @@ namespace FastbootStudio.Mobile.Native
         public void PermissionAnswered(bool granted) => permission?.TrySetResult(granted);
 
         /// <summary>Called when a USB device goes away: a connection to it is closed, never reused.</summary>
-        public void Detached(UsbDevice d)
+        /// <param name="then">Run once the connection is closed (or at once when the device was not the open one).</param>
+        public void Detached(UsbDevice d, Action then = null)
         {
-            lock (gate)
+            // Called on the main thread, which must never wait for a flash: the gate is taken on
+            // another thread. A send in progress is told now, so it ends as failed without
+            // waiting for the USB timeout.
+            string open = openName;
+            if (d == null || open == null || d.DeviceName != open)
             {
-                if (device != null && d != null && d.DeviceName == device.DeviceName)
-                {
-                    Log.Add("otg: " + (Phone?.Serial ?? "device") + " unplugged");
-                    CloseLocked();
-                }
+                then?.Invoke();
+                return;
             }
+            unplugged = true;
+            try { sending?.Cancel(); } catch (ObjectDisposedException) { }
+            Task.Run(() =>
+            {
+                lock (gate)
+                {
+                    if (openName == open)
+                    {
+                        Log.Add("otg: " + (Phone?.Serial ?? "device") + " unplugged");
+                        CloseLocked();
+                    }
+                }
+                then?.Invoke();
+            });
+        }
+
+        /// <summary>
+        /// Stops a send that has not finished: the image has only reached the bootloader's memory,
+        /// so nothing is written. False once the bootloader is writing, which cannot be stopped.
+        /// </summary>
+        public bool Cancel()
+        {
+            CancellationTokenSource s = sending;
+            if (s == null)
+                return false;
+            try { s.Cancel(); } catch (ObjectDisposedException) { return false; }
+            Log.Add("otg: cancel asked");
+            return true;
         }
 
         /// <summary>Asks for the USB permission when needed, opens the phone and reads what it is.</summary>
@@ -109,7 +158,8 @@ namespace FastbootStudio.Mobile.Native
                 throw new BridgeError("no-device");
             if (!usb.HasPermission(d))
             {
-                permission = new TaskCompletionSource<bool>();
+                // Answered on the main thread; opening the phone and reading it goes on elsewhere.
+                permission = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
                 Intent intent = new Intent(PermissionAction);
                 intent.SetPackage(activity.PackageName);
                 PendingIntentFlags flags = PendingIntentFlags.UpdateCurrent | (OperatingSystem.IsAndroidVersionAtLeast(31) ? PendingIntentFlags.Mutable : 0);
@@ -130,7 +180,7 @@ namespace FastbootStudio.Mobile.Native
                     c.Close();
                     throw new BridgeError("usb-open-failed");
                 }
-                device = d; connection = c; claimed = iface;
+                device = d; connection = c; claimed = iface; openName = d.DeviceName; unplugged = false;
                 client = new FastbootClient(new UsbTransport(c, input, output));
                 try
                 {
@@ -169,33 +219,14 @@ namespace FastbootStudio.Mobile.Native
             };
             string slot = Clean(client.TryGetVar("current-slot"))?.TrimStart('_');
             p.Slot = slot == "a" || slot == "b" ? "_" + slot : null;
-            foreach (string b in FlashTargets.Allowed)
-            {
-                bool slotted = Clean(client.TryGetVar("has-slot:" + b)) == "yes";
-                foreach (string name in slotted ? new[] { b + "_a", b + "_b" } : new[] { b })
-                {
-                    long? bytes = Hex(client.TryGetVar("partition-size:" + name));
-                    if (bytes.HasValue)
-                        p.Partitions[name] = bytes.Value;
-                }
-            }
+            // With their sizes, or -1 each when this bootloader answers no partition-size at all.
+            foreach (KeyValuePair<string, long> part in client.AllowedPartitions())
+                p.Partitions[part.Key] = part.Value;
             return p;
         }
 
         static string Clean(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-        static long? Hex(string value)
-        {
-            value = Clean(value);
-            if (value == null)
-                return null;
-            try
-            {
-                return value.StartsWith("0x", StringComparison.OrdinalIgnoreCase) ? Convert.ToInt64(value.Substring(2), 16) : long.Parse(value);
-            }
-            catch (FormatException) { return null; }
-            catch (OverflowException) { return null; }
-        }
 
         /// <summary>
         /// Sends a checked file and writes it. The serial is read again first: if the cable
@@ -219,21 +250,45 @@ namespace FastbootStudio.Mobile.Native
                 catch (FastbootException) { serial = null; }
                 if (serial != null && serial != Phone.Serial)
                     throw new BridgeError("serial-mismatch");
+                CancellationTokenSource stop = new CancellationTokenSource();
                 try
                 {
                     Log.Add("otg: send " + Path.GetFileName(path) + " " + length + " bytes to " + Phone.Serial);
+                    sending = stop;
+                    if (unplugged)
+                        throw new BridgeError("usb-gone");
                     using (FileStream file = File.OpenRead(path))
-                        client.Download(file, length, sent => progress?.Invoke(sent, length));
+                        client.Download(file, length, sent => progress?.Invoke(sent, length), stop.Token);
+                    // From here the bootloader writes: that is not stopped half-way.
+                    sending = null;
                     Log.Add("otg: flash:" + partition);
                     client.Flash(partition);
                     foreach (string info in client.Info)
                         Log.Add("otg: " + info);
                     Log.Add("otg: done " + partition);
                 }
+                catch (System.OperationCanceledException)
+                {
+                    // The bootloader still waits for the rest of the image: the connection is of no more use.
+                    Log.Add(unplugged ? "otg: unplugged while sending" : "otg: cancelled while sending, nothing written");
+                    bool gone = unplugged;
+                    CloseLocked();
+                    throw new BridgeError(gone ? "usb-gone" : "cancelled");
+                }
                 catch (FastbootException e)
                 {
                     Log.Add("otg: failed " + e.Message);
+                    if (unplugged)
+                    {
+                        CloseLocked();
+                        throw new BridgeError("usb-gone");
+                    }
                     throw new BridgeError("otg-failed: " + e.Message);
+                }
+                finally
+                {
+                    sending = null;
+                    stop.Dispose();
                 }
             }
         }
@@ -276,7 +331,7 @@ namespace FastbootStudio.Mobile.Native
                 connection?.Close();
             }
             catch (Exception) { }
-            connection = null; claimed = null; client = null; device = null; Phone = null;
+            connection = null; claimed = null; client = null; device = null; Phone = null; openName = null;
         }
 
         /// <summary>Bulk transfers in pieces the USB host stack accepts on every Android version.</summary>
@@ -331,7 +386,7 @@ namespace FastbootStudio.Mobile.Native
         public long? MaxDownload { get; set; }
         public string Slot { get; set; }
 
-        /// <summary>Allowed partitions the phone has, with their sizes.</summary>
+        /// <summary>Allowed partitions the phone has, with their sizes (-1 when the bootloader does not give sizes).</summary>
         public Dictionary<string, long> Partitions { get; } = new Dictionary<string, long>(StringComparer.Ordinal);
 
         /// <summary>
@@ -340,7 +395,8 @@ namespace FastbootStudio.Mobile.Native
         /// </summary>
         public PhoneIdentity Identity => new PhoneIdentity
         {
-            Serial = Serial, Device = Product, HasInitBoot = Partitions.Keys.Any(k => FlashTargets.BaseName(k) == "init_boot"),
+            // Only a partition the bootloader gave a size for is known to be there.
+            Serial = Serial, Device = Product, HasInitBoot = Partitions.Any(k => k.Value >= 0 && FlashTargets.BaseName(k.Key) == "init_boot"),
         };
 
         /// <summary>The partition for a base name on the active slot or the other one; null when the phone has none.</summary>

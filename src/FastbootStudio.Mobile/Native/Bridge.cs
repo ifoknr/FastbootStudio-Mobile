@@ -41,7 +41,74 @@ namespace FastbootStudio.Mobile.Native
         Pending pending;
 
         /// <summary>The file a running flash reads: never cleaned up under it.</summary>
-        volatile string inUse;
+        static volatile string inUse;
+
+        // ---------------------------------------------------------------- the page and the running job
+        //
+        // Android can make the activity (and so the page and this bridge) again while a write
+        // runs: a language or font-size change, a window resize. The job keeps running on its
+        // thread, so what the page needs to show it lives here, for the whole app: the page
+        // that comes back asks "run.state" and goes on from the steps so far; the end comes as
+        // the "runEnd" event.
+
+        static readonly object liveGate = new object();
+        static MainActivity live;
+        static bool running;
+
+        static readonly object runGate = new object();
+        static string runMeta, runResult, runError;
+        static bool runEnded;
+        static long runSent, runTotal;
+        static readonly List<string> runLines = new List<string>();
+
+        /// <summary>The activity showing the page now; the screen stays on for it while a job runs.</summary>
+        public static void Attach(MainActivity activity)
+        {
+            lock (liveGate)
+            {
+                live = activity;
+                if (running)
+                    activity.KeepAwake(true);
+            }
+        }
+
+        public static void Detach(MainActivity activity)
+        {
+            lock (liveGate)
+                if (live == activity)
+                    live = null;
+        }
+
+        static void Send(string name, JsonNode data)
+        {
+            MainActivity a;
+            lock (liveGate)
+                a = live;
+            a?.Js("window.fbsEvent && window.fbsEvent(" + JsonValue.Create(name).ToJsonString() + "," + (data?.ToJsonString() ?? "null") + ")");
+        }
+
+        /// <summary>A step of the running job: kept for a page that comes back, and sent to the page there is.</summary>
+        static void Progress(string line)
+        {
+            lock (runGate)
+                if (runMeta != null && !runEnded)
+                    runLines.Add(line);
+            Send("progress", new JsonObject { ["line"] = line });
+        }
+
+        static JsonNode RunState()
+        {
+            lock (runGate)
+            {
+                if (runMeta == null)
+                    return null;
+                return new JsonObject
+                {
+                    ["meta"] = JsonNode.Parse(runMeta), ["lines"] = Json.Strings(runLines), ["sent"] = runSent, ["total"] = runTotal,
+                    ["state"] = runEnded ? "ended" : "running", ["result"] = runResult == null ? null : JsonNode.Parse(runResult), ["error"] = runError,
+                };
+            }
+        }
 
         public Bridge(MainActivity activity, Phone phone, Settings settings, Otg otg)
         {
@@ -106,8 +173,7 @@ namespace FastbootStudio.Mobile.Native
             });
         }
 
-        public void Event(string name, JsonNode data) =>
-            activity.Js("window.fbsEvent && window.fbsEvent(" + JsonValue.Create(name).ToJsonString() + "," + (data?.ToJsonString() ?? "null") + ")");
+        public void Event(string name, JsonNode data) => Send(name, data);
 
         async Task<JsonNode> Dispatch(string method, JsonObject a)
         {
@@ -134,23 +200,25 @@ namespace FastbootStudio.Mobile.Native
                 case "flash.check":
                     return FlashCheck(a);
                 case "flash.run":
-                    return Exclusive(() => FlashRun(a));
+                    return Exclusive(() => FlashRun(a), a);
                 case "kernel.check":
                     return KernelCheck(a);
                 case "kernel.run":
-                    return Exclusive(() => KernelRun(a));
+                    return Exclusive(() => KernelRun(a), a);
                 case "companion.find":
                     // Only with root: without it the module is of no use, so it is never mentioned.
                     return phone.Root ? companion.Find() : new JsonObject { ["installed"] = false };
                 case "companion.backup":
-                    return Exclusive(() => CompanionBackup(a));
+                    return Exclusive(() => CompanionBackup(a), a);
                 case "companion.bundle":
                     RequireRoot();
                     return new JsonObject { ["file"] = companion.Bundle() };
                 case "backup.list":
                     return BackupList();
                 case "backup.create":
-                    return Exclusive(() => BackupCreate(a));
+                    return Exclusive(() => BackupCreate(a), a);
+                case "backup.space":
+                    return BackupSpace();
                 case "backup.verify":
                     return BackupVerify(a);
                 case "backup.delete":
@@ -174,7 +242,22 @@ namespace FastbootStudio.Mobile.Native
                 case "otg.check":
                     return OtgCheck(a);
                 case "otg.flash":
-                    return Exclusive(() => OtgFlash(a));
+                    return Exclusive(() => OtgFlash(a), a);
+                case "otg.cancel":
+                    return new JsonObject { ["cancelled"] = otg.Cancel() };
+                case "run.state":
+                    return RunState();
+                case "run.clear":
+                    // The page has shown the result: a page made later starts clean.
+                    lock (runGate)
+                        if (runEnded)
+                        {
+                            runMeta = null;
+                            runLines.Clear();
+                        }
+                    return null;
+                case "logs.save":
+                    return new JsonObject { ["saved"] = await activity.SaveText("fastboot-studio-log-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture) + ".txt", string.Join("\n", Log.All()) + "\n") };
                 case "otg.reboot":
                     string target = Json.Str(a, "target");
                     if (target != null && target != "bootloader" && target != "recovery" && target != "fastboot")
@@ -190,20 +273,65 @@ namespace FastbootStudio.Mobile.Native
         }
 
         /// <summary>One write at a time, with the screen kept on while it runs.</summary>
-        JsonNode Exclusive(Func<JsonNode> work)
+        /// <param name="a">The call's arguments: with a "run" object (what the page shows for this job), the job's steps and end are kept for a page that comes back.</param>
+        JsonNode Exclusive(Func<JsonNode> work, JsonObject a = null)
         {
             if (!busy.Wait(0))
                 throw new BridgeError("busy");
-            activity.KeepAwake(true);
+            string meta = (a?["run"] as JsonObject)?.ToJsonString();
+            // Only a job the page shows as one is kept; a quick one without "run" (deleting a backup) leaves the last result alone.
+            bool tracked = meta != null;
+            if (tracked)
+                lock (runGate)
+                {
+                    runMeta = meta;
+                    runLines.Clear();
+                    runResult = runError = null;
+                    runEnded = false;
+                    runSent = runTotal = 0;
+                }
+            lock (liveGate)
+            {
+                running = true;
+                live?.KeepAwake(true);
+            }
+            string error = null;
+            JsonNode result = null;
             try
             {
-                return work();
+                result = work();
+                return result;
+            }
+            catch (BridgeError e)
+            {
+                error = e.Message;
+                throw;
+            }
+            catch (Exception e)
+            {
+                error = "internal: " + e.Message;
+                throw;
             }
             finally
             {
                 inUse = null;
-                activity.KeepAwake(false);
+                JsonNode end = null;
+                lock (runGate)
+                    if (tracked && runMeta != null)
+                    {
+                        runEnded = true;
+                        runError = error;
+                        runResult = error == null ? result?.ToJsonString() : null;
+                        end = new JsonObject { ["result"] = runResult == null ? null : JsonNode.Parse(runResult), ["error"] = runError };
+                    }
+                lock (liveGate)
+                {
+                    running = false;
+                    live?.KeepAwake(false);
+                }
                 busy.Release();
+                if (end != null)
+                    Send("runEnd", end);
             }
         }
 
@@ -366,7 +494,7 @@ namespace FastbootStudio.Mobile.Native
             if (Json.Str(a, "source") == "backup")
             {
                 string name = Json.Str(a, "name"), file = Json.Str(a, "file");
-                BackupFolder folder = phone.Fetch(name, file) ?? throw new BridgeError("backup-unreadable");
+                BackupFolder folder = phone.Fetch(name, file, inUse) ?? throw new BridgeError("backup-unreadable");
                 p.Path = Path.Combine(folder.Path, file);
                 p.Check = ImageCheck.FromBackup(folder, file, partition, bytes, id, ledger.Get(name));
             }
@@ -382,11 +510,12 @@ namespace FastbootStudio.Mobile.Native
         JsonNode FlashRun(JsonObject a)
         {
             RequireRoot();
-            Pending p = Take(a, "image");
+            // Before the check is taken: a low battery leaves it to be used once the phone is charged.
             RequireBattery();
+            Pending p = Take(a, "image");
             inUse = p.Path;
             FlashOutcome o = phone.Flasher.Flash(p.Path, p.Partition, p.Check, ConsentFrom(a, settings), phone.Identity,
-                settings.BackupFirst, settings.ReadBack, line => Event("progress", new JsonObject { ["line"] = line }));
+                settings.BackupFirst, settings.ReadBack, Progress);
             RecordBackup(o.BackupFolder);
             return new JsonObject
             {
@@ -417,12 +546,12 @@ namespace FastbootStudio.Mobile.Native
         JsonNode KernelRun(JsonObject a)
         {
             RequireRoot();
-            Pending p = Take(a, "kernel");
             RequireBattery();
+            Pending p = Take(a, "kernel");
             inUse = p.Path;
             AnyKernelInstaller installer = new AnyKernelInstaller(SuShell.Instance, phone.Flasher);
             KernelOutcome o = installer.Install(p.Path, p.Zip, ConsentFrom(a, settings), phone.Identity, phone.Props.Slot,
-                settings.BackupFirst, line => Event("progress", new JsonObject { ["line"] = line }));
+                settings.BackupFirst, Progress);
             RecordBackup(o.BackupFolder);
             return new JsonObject
             {
@@ -450,18 +579,38 @@ namespace FastbootStudio.Mobile.Native
             return list;
         }
 
-        JsonNode BackupCreate(JsonObject a)
+        /// <summary>The partitions a boot backup copies: the allowed ones on the current slot, or on both.</summary>
+        List<string> BackupParts(bool both)
         {
-            RequireRoot();
-            bool both = Json.Bool(a, "both");
             List<string> parts = new List<string>();
             foreach (string b in FlashTargets.Allowed)
                 foreach (string p in both ? new[] { phone.Target(b, false), phone.Target(b, true) } : new[] { phone.Target(b, false) })
                     if (p != null && !parts.Contains(p))
                         parts.Add(p);
-            string folder = phone.Flasher.Backup(parts, phone.Identity, "boot", line => Event("progress", new JsonObject { ["line"] = line }));
+            return parts;
+        }
+
+        /// <summary>What a new backup takes and what is free where backups go, in bytes (null when it cannot be read).</summary>
+        JsonNode BackupSpace()
+        {
+            RequireRoot();
+            // df needs a folder that exists; the first backup makes it anyway.
+            SuShell.Instance.Run("mkdir -p " + Sh.Q(RootFlasher.BackupRoot));
+            return new JsonObject
+            {
+                ["free"] = phone.Flasher.FreeBytes(RootFlasher.BackupRoot),
+                ["need"] = phone.Flasher.BackupBytes(BackupParts(false)), ["needBoth"] = phone.Flasher.BackupBytes(BackupParts(true)),
+            };
+        }
+
+        JsonNode BackupCreate(JsonObject a)
+        {
+            RequireRoot();
+            bool both = Json.Bool(a, "both");
+            List<string> parts = BackupParts(both);
+            string folder = phone.Flasher.Backup(parts, phone.Identity, "boot", Progress);
             if (folder == null)
-                throw new BridgeError("backup-failed");
+                throw new BridgeError(phone.Flasher.BackupError ?? "backup-failed");
             RecordBackup(folder);
             return new JsonObject { ["name"] = Path.GetFileName(folder) };
         }
@@ -471,7 +620,7 @@ namespace FastbootStudio.Mobile.Native
             RequireRoot();
             if (!Json.Bool(companion.Find(), "usable"))
                 throw new BridgeError("companion-missing");
-            string folder = companion.Backup(Json.Str(a, "set"), line => Event("progress", new JsonObject { ["line"] = line }));
+            string folder = companion.Backup(Json.Str(a, "set"), Progress);
             RecordBackup(folder);
             return new JsonObject { ["name"] = folder };
         }
@@ -479,8 +628,18 @@ namespace FastbootStudio.Mobile.Native
         JsonNode BackupVerify(JsonObject a)
         {
             RequireRoot();
-            List<string> failed = phone.Verify(Json.Str(a, "name")) ?? throw new BridgeError("not-allowed");
-            return new JsonObject { ["failed"] = Json.Strings(failed) };
+            string name = Json.Str(a, "name");
+            List<string> failed = phone.Verify(name) ?? throw new BridgeError("not-allowed");
+            // SHA256SUMS sits beside the images on shared storage; the app's own record of a backup it made does not.
+            IReadOnlyDictionary<string, string> recorded = ledger.Get(name);
+            if (recorded != null)
+            {
+                BackupEntry e = phone.Backups().FirstOrDefault(b => b.Name == name);
+                foreach (string f in BackupListing.NotAsRecorded(e?.Sums, recorded))
+                    if (!failed.Contains(f))
+                        failed.Add(f);
+            }
+            return new JsonObject { ["failed"] = Json.Strings(failed), ["recorded"] = recorded != null };
         }
 
         JsonNode BackupDelete(JsonObject a)
@@ -518,7 +677,6 @@ namespace FastbootStudio.Mobile.Native
             long now = DateTime.UtcNow.Ticks;
             if (!force && (!settings.AutoUpdate || now - settings.LastUpdateCheck < UpdateCheck.Every.Ticks))
                 return new JsonObject { ["skipped"] = true };
-            settings.LastUpdateCheck = now;
             string installed = activity.Version;
             using (System.Net.Http.HttpRequestMessage request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, UpdateCheck.Api))
             {
@@ -535,10 +693,12 @@ namespace FastbootStudio.Mobile.Native
                 }
                 using (response)
                 {
+                    if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.NotFound)
+                        throw new BridgeError("update-failed: " + (int)response.StatusCode);
+                    // Only an answer counts as today's check: offline, the next start tries again.
+                    settings.LastUpdateCheck = now;
                     if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
                         return new JsonObject { ["installed"] = installed, ["none"] = true };
-                    if (!response.IsSuccessStatusCode)
-                        throw new BridgeError("update-failed: " + (int)response.StatusCode);
                     UpdateCheck.Release r = UpdateCheck.Newest(await response.Content.ReadAsStringAsync(), installed);
                     if (r == null)
                         return new JsonObject { ["installed"] = installed, ["none"] = true };
@@ -562,7 +722,7 @@ namespace FastbootStudio.Mobile.Native
             if (!FlashTargets.IsAllowed(baseName))
                 throw new BridgeError("not-allowed");
             string partition = target.Target(baseName, Json.Bool(a, "other")) ?? throw new BridgeError("no-partition");
-            long? bytes = target.Partitions.TryGetValue(partition, out long b) ? b : (long?)null;
+            long? bytes = target.Partitions.TryGetValue(partition, out long b) && b >= 0 ? b : (long?)null;
             Pending p = new Pending { Kind = "otg", Partition = partition, Serial = target.Serial };
             string token = Json.Str(a, "token");
             if (Json.Str(a, "source") == "folder")
@@ -596,6 +756,8 @@ namespace FastbootStudio.Mobile.Native
 
         JsonNode OtgFlash(JsonObject a)
         {
+            // This phone's battery: it is the one sending, and it must not go off half-way.
+            RequireBattery();
             Pending p = Take(a, "otg");
             inUse = p.Path;
             // The check was made against one phone: it is not used for another one opened since.
@@ -611,6 +773,11 @@ namespace FastbootStudio.Mobile.Native
                 if (percent == last)
                     return;
                 last = percent;
+                lock (runGate)
+                {
+                    runSent = sent;
+                    runTotal = total;
+                }
                 Event("otgProgress", new JsonObject { ["sent"] = sent, ["total"] = total });
             });
             return new JsonObject { ["partition"] = p.Partition, ["sha256"] = p.Check.Sha256 };

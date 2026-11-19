@@ -73,7 +73,7 @@ namespace FastbootStudio.Mobile.Core
             {
                 outcome.BackupFolder = flasher.Backup(touched, phone, "before-kernel", Step);
                 if (outcome.BackupFolder == null)
-                    return Fail("backup-failed");
+                    return Fail(flasher.BackupError ?? "backup-failed");
             }
             string before = Hash(target);
 
