@@ -16,6 +16,34 @@ const mib = bytes => {
   return bytes + ' B';
 };
 
+// What the pages say beyond the checks and errors below, by name.
+const M = {
+  back: () => t('رجوع', 'Back'),
+  scanNote: () => t('التطبيق يقرا سكربتات الملف ويمنع الأوامر الخطيرة المعروفة، بس هذا الفحص مو ضمان وما يكشف كل شي. فلّش ملفات من مطوّر تثق فيه بس.',
+    'The app reads the zip’s scripts and refuses the dangerous commands it knows, but this scan is best-effort and cannot catch everything. Only flash zips from a developer you trust.'),
+  copyDetails: () => t('نسخ معلومات الجهاز', 'Copy device details'),
+  detailsCopied: () => t('انسخت معلومات الجهاز', 'Device details copied'),
+  saveLog: () => t('حفظ في ملف', 'Save to a file'),
+  logSaved: () => t('انحفظ السجل', 'Log saved'),
+  logNotSaved: () => t('ما انحفظ السجل', 'The log was not saved'),
+  spaceReading: () => t('يحسب المساحة…', 'Checking free space…'),
+  spaceLine: (need, free) => t(`تحتاج ${LE(mib(need))} · المتاح ${LE(mib(free))}`, `Needs ${esc(mib(need))} · ${esc(mib(free))} free`),
+  spaceBoth: (need) => t(`السلوتين: ${LE(mib(need))}`, `Both slots: ${esc(mib(need))}`),
+  spaceShort: () => t('المساحة ما تكفي لهذي النسخة. فضّي مساحة وجرّب مرة ثانية.', 'Not enough free space for this backup. Free some space and try again.'),
+  cancelSend: () => t('إلغاء الإرسال', 'Cancel sending'),
+  cancelling: () => t('يلغي…', 'Cancelling…'),
+  cancelNote: () => t('الإلغاء ممكن وقت الإرسال بس. إذا بدأ البوت لودر يكتب، ما ينوقف.', 'Cancelling works only while sending. Once the bootloader starts writing, it cannot be stopped.'),
+  cancelTooLate: () => t('البوت لودر بدأ يكتب، ما نقدر نوقفه', 'The bootloader is already writing; it cannot be stopped'),
+  otgCancelled: () => t('ما انكتب شي على الجوال الموصول. شغّله على fastboot من جديد قبل ما تحاول مرة ثانية.', 'Nothing was written to the connected phone. Restart it into fastboot before trying again.'),
+  otgGone: () => t('الكيبل انفصل قبل ما يأكد البوت لودر الكتابة. وصّل الجوال وفلّش القسم مرة ثانية قبل ما تشغّله.', 'The cable came out before the bootloader confirmed the write. Reconnect the phone and flash the partition again before starting it.'),
+  recordedOk: () => t('ومطابقة لسجل التطبيق الخاص، مو بس لملف SHA256SUMS.', 'It also matches the app’s own record, not only SHA256SUMS.'),
+  slotWord: slot => slot ? t(` · السلوت ${LE(slot.replace('_', ''))}`, ` · slot ${esc(slot.replace('_', ''))}`) : '',
+  targetThis: (partition, slot) => t(`بينكتب على القسم ${LE(partition)}${M.slotWord(slot)} في هذا الجوال.`, `This writes partition ${esc(partition)}${M.slotWord(slot)} on this phone.`),
+  targetOtg: (partition, slot, serial) => t(`بينكتب على القسم ${LE(partition)}${M.slotWord(slot)} في الجوال الموصول ${LE(serial)}.`, `This writes partition ${esc(partition)}${M.slotWord(slot)} on the connected phone ${esc(serial)}.`),
+  on: () => t('شغّال', 'On'),
+  off: () => t('مقفل', 'Off'),
+};
+
 // [text, small] for one check item. v = values, lv = its level.
 function checkText(item, ctx) {
   const v = item.values || [], c = item.code, lv = item.level;
@@ -50,6 +78,8 @@ function checkText(item, ctx) {
     case 'RecordedMatches': return [t('يطابق السجل الخاص بالتطبيق', 'Matches the app’s own record'), t('البصمة اللي حفظها التطبيق وقت النسخ', 'The SHA-256 the app kept when it made the backup')];
     case 'BackupTampered': return [t('النسخة تغيّرت بعد ما أخذها التطبيق', 'The backup was changed after the app made it'),
       t('الصورة و SHA256SUMS اتعدّلوا الاثنين، والسجل الخاص بالتطبيق ما يطابق. ممكن تطبيق ثاني عدّلها.', 'Both the image and SHA256SUMS were changed, and the app’s own record does not match. Another app may have changed it.')];
+    case 'NotRecorded': return [t('الملف مو من النسخة اللي أخذها التطبيق', 'This file is not part of the backup the app made'),
+      t(`انضاف للمجلد بعدين، وسجل التطبيق الخاص ما يعرفه: ${LE(v[0])}`, `It was added to the folder later; the app’s own record does not know it: ${esc(v[0])}`)];
     case 'KernelSame': return [t('نفس إصدار كيرنل جوالك', 'The same kernel version as your phone'), LE(v[0])];
     case 'KernelVersionDiffers': return [t('إصدار الكيرنل مختلف (عادي)', 'Different kernel version (normal)'), L(`${esc(v[1])} → ${esc(v[0])}`)];
     case 'NotAnyKernel': return [t('مو ملف AnyKernel3', 'Not an AnyKernel3 zip'), t('ما فيه anykernel.sh أو update-binary', 'No anykernel.sh or update-binary inside')];
@@ -111,6 +141,8 @@ function errText(code) {
     'no-size': t('ما قدرنا نعرف حجم القسم', 'Could not read the partition size'),
     'too-big': t('الملف أكبر من القسم', 'The file is bigger than the partition'),
     'backup-failed': t('النسخة الاحتياطية ما نجحت، فما انكتب شي', 'The backup failed, so nothing was written'),
+    'no-space': t('المساحة ما تكفي للنسخة الاحتياطية، فما انكتب شي', 'Not enough free space for the backup, so nothing was written'),
+    'cancelled': t('انلغى الإرسال', 'Sending was cancelled'),
     'backup-unreadable': t('ما قدرنا نقرا النسخة', 'Could not read the backup'),
     'write-failed': t('الكتابة على القسم ما نجحت', 'Writing the partition failed'),
     'verify-failed': t('القسم بعد الكتابة ما يطابق الملف', 'The partition does not match the file after writing'),

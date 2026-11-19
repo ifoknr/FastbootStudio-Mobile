@@ -50,7 +50,7 @@ const ic = {
   refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
   power: '<path d="M12 3v9"/><path d="M6.3 7.5a8 8 0 1 0 11.4 0"/>',
 };
-const svg = k => `<svg viewBox="0 0 24 24">${ic[k]}</svg>`;
+const svg = k => `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">${ic[k]}</svg>`;
 
 // ---------------------------------------------------------------- state
 
@@ -61,6 +61,8 @@ const st = {
   tab: 'device', page: null,
   phone: null, phoneErr: null, refreshing: false,
   backups: null, bk: {}, bkOpen: null,
+  // Backups whose last check was also against the app's own record, and what a new backup takes against what is free.
+  bkRec: {}, space: null,
   // The Companion module, looked for only with root: {installed, version, enabled, usable}.
   comp: null,
   // The update check: {checking, result {installed, latest, newer, page, none}, err, hidden}.
@@ -78,7 +80,7 @@ const st = {
 
 // ---------------------------------------------------------------- small parts
 
-const head = (title, sub, chip, back) => `<header>${back ? `<button class="back" data-act="back">${A ? '›' : '‹'}</button>` : '<img class="ic-dark" src="icon-themed.png" alt=""><img class="ic-light" src="icon-light.png" alt="">'}
+const head = (title, sub, chip, back) => `<header>${back ? `<button class="back" data-act="back" aria-label="${M.back()}">${A ? '›' : '‹'}</button>` : '<img class="ic-dark" src="icon-themed.png" alt=""><img class="ic-light" src="icon-light.png" alt="">'}
 <div class="t"><h1>${title}</h1><p>${sub || ''}</p></div>${chip || ''}</header>`;
 const rows = r => `<div class="rows">${r.filter(Boolean).map(([k, v, ar]) => `<div class="k">${k}</div><div class="v${ar ? ' ar' : ''}">${v}</div>`).join('')}</div>`;
 const fileCard = (icon, name, meta, side, act) => `<button class="file"${act ? ` data-act="${act}"` : ''}><div class="ico">${svg(icon)}</div><div style="flex:1;min-width:0"><div class="n">${esc(name)}</div><div class="m">${meta}</div></div>${side || ''}</button>`;
@@ -86,10 +88,10 @@ const vrow = (kind, mark, text, small, extra) => `<div class="vrow"><span class=
 const chip = (kind, text) => `<span class="chip ${kind || ''}">${text}</span>`;
 const LEVEL = { ok: ['ok', '✓'], notice: ['info', '!'], warn: ['warn', '!'], block: ['bad', '✗'] };
 const navItems = () => [['device', t('الجهاز', 'Device')], ['flash', t('التفليش', 'Flash')], ['backup', t('النسخ', 'Backups')], ['otg', 'OTG'], ['more', t('المزيد', 'More')]];
-const nav = () => `<nav>${navItems().map(([k, l]) => `<button class="${k === st.tab ? 'on' : ''}" data-act="tab" data-v="${k}"><span class="pill">${svg(k)}</span>${l}</button>`).join('')}</nav>`;
-const sheet = (color, body) => `<div class="scrim" data-act="sheetClose"></div><div class="sheet" style="border-top-color:var(--${color})"><div class="grab"></div>${body}</div>`;
-const spinner = text => `<div class="banner plain"><span class="spin"></span><div class="body note" style="color:var(--text)">${text}</div></div>`;
-const errBanner = code => `<div class="banner bad">${svg('warn')}<div class="body"><div class="big" style="font-size:14px">${errText(code)}</div></div></div>`;
+const nav = () => `<nav>${navItems().map(([k, l]) => `<button class="${k === st.tab ? 'on' : ''}" data-act="tab" data-v="${k}"${k === st.tab ? ' aria-current="page"' : ''}><span class="pill">${svg(k)}</span>${l}</button>`).join('')}</nav>`;
+const sheet = (color, body) => `<div class="scrim" data-act="sheetClose" aria-hidden="true"></div><div class="sheet" role="dialog" aria-modal="true" style="border-top-color:var(--${color})"><div class="grab"></div>${body}</div>`;
+const spinner = text => `<div class="banner plain" role="status"><span class="spin"></span><div class="body note" style="color:var(--text)">${text}</div></div>`;
+const errBanner = code => `<div class="banner bad" role="alert">${svg('warn')}<div class="body"><div class="big" style="font-size:14px">${errText(code)}</div></div></div>`;
 const backupDate = name => {
   const m = /(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})\d{2}$/.exec(name || '');
   if (!m) return '';
@@ -161,7 +163,8 @@ P.device = () => {
         <div class="check"><span class="dot ok"></span><span>${t('معلومات الجهاز', 'Device details')}</span></div>
         <div class="check"><span class="dot ok"></span><span>${t('إنقاذ جوال ثاني بالـ OTG', 'Rescue another phone over OTG')}</span></div>
         <div class="check"><span class="dot bad"></span><span>${t('التفليش والنسخ على هذا الجوال', 'Flashing and backups on this phone')}</span></div></div>
-      <button class="btn" data-act="refresh">${svg('refresh')}<span>${t('تحديث', 'Refresh')}</span></button></main>` + nav();
+      <button class="btn" data-act="refresh">${svg('refresh')}<span>${t('تحديث', 'Refresh')}</span></button>
+      <button class="btn sm" data-act="copyDevice">${svg('file')}<span>${M.copyDetails()}</span></button></main>` + nav();
   const tile = (cls, icon, big, label) => `<div class="tile2 ${cls}">${svg(icon)}<div><b>${big}</b><span>${label}</span></div></div>`;
   const tiles = `<div class="sect">${t('نظرة سريعة', 'At a glance')}</div><div class="tiles">
     ${tile('b', 'power', p.battery + '%', t('البطارية', 'Battery'))}${tile('m', 'device', esc(p.android || '?'), 'Android')}${tile('s', 'flash', esc((p.slot || '-').replace('_', '')), t('السلوت', 'Slot'))}
@@ -181,6 +184,7 @@ P.device = () => {
     </div>
     ${companionCard()}
     <button class="btn" data-act="refresh" ${st.refreshing ? 'disabled' : ''}>${svg('refresh')}<span>${t('تحديث', 'Refresh')}</span></button>
+    <button class="btn sm" data-act="copyDevice">${svg('file')}<span>${M.copyDetails()}</span></button>
   </main>` + nav();
 };
 
@@ -229,7 +233,7 @@ P.flash = () => {
       <div style="margin-top:${src ? 8 : 0}px;display:flex;flex-direction:column;gap:6px"><button class="opt" data-act="pickBackup" style="width:100%;text-align:start"><span class="oi">${svg('backup')}</span><div><b>${t('من النسخ الاحتياطية', 'From backups')}</b><small>${t('صورة من نسخة أخذها التطبيق لهذا الجوال', 'An image from a backup the app made of this phone')}</small></div><span class="chev" style="margin-inline-start:auto;color:var(--faint)">${A ? '‹' : '›'}</span></button>
         <button class="opt" data-act="pickFile" style="width:100%;text-align:start"><span class="oi">${svg('file')}</span><div><b>${t('ملف IMG أو ZIP', 'An IMG or ZIP file')}</b><small>${t('من ملفات الجوال، ويتحقق منه قبل أي كتابة', 'From the phone’s files, checked before any write')}</small></div><span class="chev" style="margin-inline-start:auto;color:var(--faint)">${A ? '‹' : '›'}</span></button></div></div>
     <div><div class="label">${t('2. القسم', '2. Partition')}</div>
-      <div class="parts">${ALLOWED.map(b => `<button class="${f.base === b ? 'on' : ''}" data-act="base" data-v="${b}" ${targets.includes(b) ? '' : 'disabled'}>${b}</button>`).join('')}</div></div>
+      <div class="parts">${ALLOWED.map(b => `<button class="${f.base === b ? 'on' : ''}" data-act="base" data-v="${b}" aria-pressed="${f.base === b}" ${targets.includes(b) ? '' : 'disabled'}>${b}</button>`).join('')}</div></div>
     ${p.ab ? `<div><div class="label">${t('3. السلوت', '3. Slot')}</div>
       <div class="seg"><button class="${f.other ? '' : 'on'}" data-act="slot" data-v="0"><b>${t('الحالي', 'Current')} ${LE(p.slot)}</b>${t('يبان بعد إعادة التشغيل', 'Takes effect on restart')}</button><button class="${f.other ? 'on' : ''}" data-act="slot" data-v="1"><b>${t('الثاني', 'Other')} ${LE(slotName(p, true))}</b>${t('للمتقدمين', 'Advanced')}</button></div></div>` : ''}
     ${f.src && f.src.type === 'file' ? `<div><div class="label">${t('بصمة المطور SHA-256 (اختياري)', 'Developer’s SHA-256 (optional)')}</div><input class="input" data-in="fexp" value="${esc(f.expected)}" placeholder="${t('الصق البصمة اللي نشرها المطور', 'Paste the hash the developer published')}" spellcheck="false" autocomplete="off"></div>` : ''}
@@ -254,6 +258,7 @@ P.kernel = () => {
     ${c && !c.check.canFlash ? whyButton('kernel') : ''}<button class="btn primary" data-act="flashKernel" ${c && c.check.canFlash ? '' : 'disabled'}><span>${t('فلّش الكيرنل', 'Flash the kernel')}</span></button>
     <button class="btn sm" data-act="kernelClose"><span>${t('رجوع لتفليش الصور', 'Back to flashing images')}</span></button>
     <div class="note">${t('التطبيق ياخذ نسخة من boot و init_boot و vendor_boot و dtbo قبل التثبيت (إذا مفعّلة في الإعدادات).', 'The app backs up boot, init_boot, vendor_boot and dtbo before installing (when enabled in Settings).')}</div>
+    <div class="banner info">${svg('info')}<div class="body note">${M.scanNote()}</div></div>
   </main>` + nav();
 };
 
@@ -265,7 +270,7 @@ P.running = () => {
   if (r.kind === 'image') {
     steps.push([t('تحقق من الملف', 'Check the file'), 'SHA-256', has('check ok')]);
     if (r.backupFirst) steps.push([t(`نسخة احتياطية من ${LE(r.partition)} الحالي`, `Back up the current ${esc(r.partition)}`), r.backup ? LE('Backups/…' + r.backup.slice(-16)) : '', has('backup ok')]);
-    steps.push([t('الكتابة على القسم', 'Write the partition'), LE(mib(r.size)), has('verify ok') || has('done ')]);
+    steps.push([t('الكتابة على القسم', 'Write the partition'), LE(mib(r.size)), has('written ') || has('verify ok') || has('done ')]);
     if (r.readBack) steps.push([t('قراءة القسم ومقارنته بالملف', 'Read it back and compare'), 'SHA-256', has('verify ok')]);
   } else if (r.kind === 'kernel') {
     if (r.backupFirst) steps.push([t('نسخة احتياطية من أقسام الإقلاع', 'Back up the boot partitions'), r.backup ? LE('Backups/…' + r.backup.slice(-16)) : '', has('backup ok')]);
@@ -304,6 +309,9 @@ P.running = () => {
   if (r.state === 'running') {
     body = `<div class="card"><h2>${t('الخطوات', 'Steps')} ${chip('ok', L(`${done} / ${total}`))}</h2><div class="steps">${stepHtml}</div>${progress}</div>
       <div class="banner warn">${svg('warn')}<div class="body"><div class="big" style="font-size:14px">${r.kind === 'otg' ? t('لا تفصل الكيبل ولا تقفل التطبيق', 'Do not unplug the cable or close the app') : t('لا تطفي الجوال ولا تقفل التطبيق', 'Do not turn off the phone or close the app')}</div></div></div>${log}`;
+    // Only what is still on its way can be called back: the image is in the bootloader's memory until it is told to write.
+    if (r.kind === 'otg' && r.total && r.sent < r.total)
+      body += `<button class="btn" data-act="otgCancel" ${r.cancelling ? 'disabled' : ''}><span>${r.cancelling ? M.cancelling() : M.cancelSend()}</span></button><div class="note">${M.cancelNote()}</div>`;
   } else if (r.state === 'done') body = doneBody(r) + log;
   else body = failBody(r, stepHtml) + log;
   return head(title, sub, r.partition && r.kind !== 'backup' ? chip(r.state === 'failed' ? 'bad' : 'ok', LE(r.partition)) : '') + `<main>${body}</main>` + nav();
@@ -340,7 +348,8 @@ function doneBody(r) {
 function failBody(r, stepHtml) {
   // The partition may hold part of the new image: a write that started, or a kernel installer that changed it before failing.
   const written = r.outcome && (r.outcome.written || r.outcome.touched || (r.kind === 'kernel' && r.outcome.changed));
-  const note = r.kind === 'otg' ? t('الجوال الموصول ما زال في fastboot. تقدر تحاول مرة ثانية.', 'The connected phone is still in fastboot; you can try again.')
+  const code = String(r.error || '').split(':')[0];
+  const note = r.kind === 'otg' ? (code === 'cancelled' ? M.otgCancelled() : code === 'usb-gone' ? M.otgGone() : t('الجوال الموصول ما زال في fastboot. تقدر تحاول مرة ثانية.', 'The connected phone is still in fastboot; you can try again.'))
     : written ? (r.backup ? t('القسم ممكن تغيّر كله أو جزء منه. لا تعيد التشغيل: رجّع النسخة القديمة الحين.', 'The partition may be changed, all or part of it. Do not restart: put the previous copy back now.')
       : t('القسم ممكن تغيّر كله أو جزء منه، وما فيه نسخة قبل التفليش. لا تعيد التشغيل: رجّع نسخة من صفحة النسخ، أو من برنامج الويندوز.', 'The partition may be changed, all or part of it, and there is no copy from before. Do not restart: put a backup back from the Backups page, or from the Windows app.'))
     : r.kind === 'backup' ? t('ما انحفظ شي ناقص.', 'Nothing half-written was kept.')
@@ -365,8 +374,8 @@ P.backup = () => {
     const side = !b.mine ? chip('warn', t('جوال ثاني', 'Other phone'))
       : s === 'run' ? '<span class="spin"></span>' : s === 'ok' ? chip('ok', '✓ ' + t('مطابقة', 'Verified'))
       : s && s.failed ? chip('bad', '✗ ' + (A ? `${s.failed.length} ${s.failed.length === 1 ? 'ملف متغيّر' : 'ملفات متغيّرة'}` : `${s.failed.length} changed`)) : chip('', t('ما تحققت', 'Not checked'));
-    const meta = b.mine ? `${imagesCount(b.files.length)} · ${LE(mib(b.kb * 1024))} · ${setLabel(b.set)}${b.mode === 'companion' ? ' · ' + t('من الإضافة', 'Companion') : ''}` : t(`${esc(b.model || '?')} · ما تنفلش هنا`, `${esc(b.model || '?')} · not flashable here`);
-    return `<button class="bk${st.bkOpen === b.name ? ' open' : ''}" data-act="bkOpen" data-v="${esc(b.name)}"><div class="n">${esc(b.name)}</div><div class="s">${side}</div><div class="m">${meta}</div></button>`;
+    const meta = b.mine ? `${imagesCount(b.files.length)} · ${LE(mib(b.kb * 1024))} · ${setLabel(b.set)}${b.mode === 'companion' ? ' · ' + t('من الإضافة', 'Companion') : ''}` : t(`${LE(b.model || '?')} · ما تنفلش هنا`, `${esc(b.model || '?')} · not flashable here`);
+    return `<button class="bk${st.bkOpen === b.name ? ' open' : ''}" data-act="bkOpen" data-v="${esc(b.name)}" aria-expanded="${st.bkOpen === b.name}"><div class="n">${esc(b.name)}</div><div class="s">${side}</div><div class="m">${meta}</div></button>`;
   }).join('')}</div>`;
   const open = list && list.find(b => b.name === st.bkOpen);
   let detail = '';
@@ -375,7 +384,8 @@ P.backup = () => {
     const failed = s && s.failed ? s.failed : [];
     detail = `<div class="card"><h2>${t('محتوى النسخة', 'Inside the backup')} ${chip('', esc(backupDate(open.name)))}</h2>
       ${rows(open.files.map(f => [LE(f.name.replace(/\.img$/, '')), esc(short(f.sha256)) + (failed.includes(f.name) ? ' ✗' : s === 'ok' ? ' ✓' : '')]))}
-      ${open.mine ? '' : `<div class="note" style="margin-top:8px">${t(`النسخة لـ ${esc(open.model || '?')} · ${esc(open.serial || '?')}: تنفلش على جوالها بس (من OTG أو الكمبيوتر).`, `This backup is ${esc(open.model || '?')} · ${esc(open.serial || '?')}’s: it can only go back to that phone (OTG or a computer).`)}</div>`}
+      ${s === 'ok' && st.bkRec[open.name] ? `<div class="note" style="margin-top:8px">${M.recordedOk()}</div>` : ''}
+      ${open.mine ? '' : `<div class="note" style="margin-top:8px">${t(`النسخة لـ ${LE(open.model || '?')} · ${LE(open.serial || '?')}: تنفلش على جوالها بس (من OTG أو الكمبيوتر).`, `This backup is ${esc(open.model || '?')} · ${esc(open.serial || '?')}’s: it can only go back to that phone (OTG or a computer).`)}</div>`}
       <div class="${open.mine ? 'row3' : 'row2'}" style="margin-top:10px">${open.mine ? `<button class="btn sm" data-act="bkVerify" data-v="${esc(open.name)}"><span>${t('تحقق', 'Verify')}</span></button><button class="btn sm" data-act="bkRestore" data-v="${esc(open.name)}"><span>${t('استرجاع', 'Restore')}</span></button>` : ''}<button class="btn sm danger" data-act="bkDelete" data-v="${esc(open.name)}"><span>${t('حذف', 'Delete')}</span></button></div></div>`;
   }
   return top + `<main>
@@ -407,7 +417,7 @@ P.otg = () => {
     const meta = o.src.type === 'folder' ? t(`من نسخة ${esc(o.folder ? o.folder.name : '')}`, `From the ${esc(o.folder ? o.folder.name : '')} backup`) : t(`ملف · ${LE(mib(o.src.size))}`, `A file · ${esc(mib(o.src.size))}`);
     src = fileCard('file', o.src.file || o.src.name, meta, '', '');
   }
-  const folderFiles = o.folder && o.src && o.src.type === 'folder' ? '' : o.folder && !o.src ? `<div class="card"><h2>${t('اختر صورة من النسخة', 'Pick an image from the backup')} ${chip(o.folder.serial === p.serial ? 'ok' : o.folder.serial ? 'bad' : 'info', esc(o.folder.serial || t('بدون رقم', 'no serial')))}</h2><div class="files">${o.folder.files.filter(f => f.partition && ALLOWED.includes(baseOf(f.partition))).map(f => `<button class="file" data-act="otgFile" data-v="${esc(f.name)}"><div class="ico">${svg('file')}</div><div style="flex:1;min-width:0"><div class="n">${esc(f.name)}</div><div class="m">${f.listed ? 'SHA256SUMS ✓' : t('مو في SHA256SUMS', 'not in SHA256SUMS')}</div></div></button>`).join('') || `<div class="note">${t('ما فيها صور للأقسام المسموحة', 'No images for the allowed partitions')}</div>`}</div></div>` : '';
+  const folderFiles = o.folder && o.src && o.src.type === 'folder' ? '' : o.folder && !o.src ? `<div class="card"><h2>${t('اختر صورة من النسخة', 'Pick an image from the backup')} ${chip(o.folder.serial === p.serial ? 'ok' : o.folder.serial ? 'bad' : 'info', o.folder.serial ? LE(o.folder.serial) : t('بدون رقم', 'no serial'))}</h2><div class="files">${o.folder.files.filter(f => f.partition && ALLOWED.includes(baseOf(f.partition))).map(f => `<button class="file" data-act="otgFile" data-v="${esc(f.name)}"><div class="ico">${svg('file')}</div><div style="flex:1;min-width:0"><div class="n">${esc(f.name)}</div><div class="m">${f.listed ? 'SHA256SUMS ✓' : t('مو في SHA256SUMS', 'not in SHA256SUMS')}</div></div></button>`).join('') || `<div class="note">${t('ما فيها صور للأقسام المسموحة', 'No images for the allowed partitions')}</div>`}</div></div>` : '';
   const flashable = o.check && o.check.check.canFlash && !o.check.tooBigForDownload;
   return top + `<main>
     <div class="card"><div class="usb"><div class="ph">${svg('otg')}</div><div style="flex:1;min-width:0"><div style="font-weight:600">${p.userspace ? t('جوال في وضع fastbootd', 'A phone in fastbootd') : t('جوال في وضع fastboot', 'A phone in fastboot')}</div><div class="note">${LE(p.serial + (p.product ? ' · ' + p.product : ''))}</div></div><button class="chip ok" data-act="otgClose">${t('افصل', 'Disconnect')}</button></div></div>
@@ -420,7 +430,7 @@ P.otg = () => {
       <div class="row2" style="margin-top:${src ? 8 : 0}px"><button class="btn sm" data-act="otgFolder"><span>${t('من مجلد نسخة', 'From a backup folder')}</span></button><button class="btn sm" data-act="otgPickFile"><span>${t('ملف IMG', 'IMG file')}</span></button></div></div>
     ${folderFiles}
     <div><div class="label">${t('2. القسم', '2. Partition')}</div>
-      <div class="parts">${ALLOWED.map(b => `<button class="${o.base === b ? 'on' : ''}" data-act="otgBase" data-v="${b}" ${(p.targets || []).includes(b) ? '' : 'disabled'}>${b}</button>`).join('')}</div></div>
+      <div class="parts">${ALLOWED.map(b => `<button class="${o.base === b ? 'on' : ''}" data-act="otgBase" data-v="${b}" aria-pressed="${o.base === b}" ${(p.targets || []).includes(b) ? '' : 'disabled'}>${b}</button>`).join('')}</div></div>
     ${p.slot ? `<div><div class="label">${t('3. السلوت', '3. Slot')}</div><div class="seg"><button class="${o.other ? '' : 'on'}" data-act="otgSlot" data-v="0"><b>${t('الحالي', 'Current')} ${LE(p.slot)}</b></button><button class="${o.other ? 'on' : ''}" data-act="otgSlot" data-v="1"><b>${t('الثاني', 'Other')} ${LE(p.slot === '_a' ? '_b' : '_a')}</b></button></div></div>` : ''}
     ${o.src && o.src.type === 'file' ? `<div><div class="label">${t('بصمة المطور SHA-256 (اختياري)', 'Developer’s SHA-256 (optional)')}</div><input class="input" data-in="oexp" value="${esc(o.expected)}" placeholder="${t('الصق البصمة اللي نشرها المطور', 'Paste the hash the developer published')}" spellcheck="false" autocomplete="off"></div>` : ''}
     ${o.checking ? spinner(t('يتحقق من الملف…', 'Checking the file…')) : o.check ? checkBanner(o.check.check, 'otg') + (o.check.tooBigForDownload ? errBanner('too-big-for-download') : '') : ''}
@@ -445,8 +455,8 @@ P.more = () => {
 };
 
 P.settings = () => {
-  const s = st.s, seg = (key, opts) => `<div class="seg">${opts.map(([v, b, small]) => `<button class="${s[key] === v ? 'on' : ''}" data-act="set" data-k="${key}" data-v="${v}"><b>${b}</b>${small || ''}</button>`).join('')}</div>`;
-  const tog = (key, b, small) => `<button class="setrow" data-act="toggle" data-k="${key}"><div class="tx"><b>${b}</b><small>${small}</small></div><span class="toggle${s[key] ? ' on' : ''}"></span></button>`;
+  const s = st.s, seg = (key, opts) => `<div class="seg">${opts.map(([v, b, small]) => `<button class="${s[key] === v ? 'on' : ''}" data-act="set" data-k="${key}" data-v="${v}" aria-pressed="${s[key] === v}"><b>${b}</b>${small || ''}</button>`).join('')}</div>`;
+  const tog = (key, b, small) => `<button class="setrow" data-act="toggle" data-k="${key}" role="switch" aria-checked="${!!s[key]}"><div class="tx"><b>${b}</b><small>${small}</small></div><span class="toggle${s[key] ? ' on' : ''}"></span></button>`;
   return head(t('الإعدادات', 'Settings'), t('المظهر واللغة والأمان', 'Appearance, language and safety'), '', true) + `<main>
     <div class="card"><h2>${t('المظهر', 'Appearance')}</h2>
       ${[['auto', 'device', t('تلقائي', 'Auto'), t('مثل الجوال: داكن بالليل وفاتح بالنهار', 'Like the phone: dark at night, light by day')], ['dark', 'about', t('داكن', 'Dark'), t('الألوان المطفية، مريحة للعين', 'Soft muted colours, easy on the eyes')], ['light', 'power', t('فاتح', 'Light'), t('خلفية فاتحة وواضحة', 'A bright, clear background')]].map(([v, i, b, sm]) => `<button class="opt${s.theme === v ? ' on' : ''}" style="width:100%;text-align:start" data-act="set" data-k="theme" data-v="${v}"><span class="oi">${svg(i)}</span><div><b>${b}</b><small>${sm}</small></div><span class="r"></span></button>`).join('<div style="height:6px"></div>')}
@@ -465,7 +475,7 @@ P.settings = () => {
         <button class="btn sm" style="width:auto" data-act="updCheck" ${st.upd.checking ? 'disabled' : ''}><span>${t('تحقق الحين', 'Check now')}</span></button></div>
       ${st.upd.result && st.upd.result.newer ? `<button class="btn sm noticeb" data-act="link" data-v="${esc(st.upd.result.page)}"><span>${t(`نزّل ${LE('v' + st.upd.result.latest)}`, `Get ${esc('v' + st.upd.result.latest)}`)}</span></button>` : ''}
       <div class="note" style="margin-top:6px">${t('التطبيق ما ينزّل ولا يركّب شي بنفسه: يفتح لك صفحة الإصدار وأنت تركّب.', 'The app never downloads or installs anything itself: it opens the release page and you install.')}</div></div>
-    <div class="card" style="border-color:var(--wline)"><h2>${t('وضع المطور', 'Developer mode')} <button class="toggle warn${s.dev ? ' on' : ''}" data-act="toggle" data-k="dev"></button></h2>
+    <div class="card" style="border-color:var(--wline)"><h2>${t('وضع المطور', 'Developer mode')} <button class="toggle warn${s.dev ? ' on' : ''}" data-act="toggle" data-k="dev" role="switch" aria-checked="${!!s.dev}" aria-label="${t('وضع المطور', 'Developer mode')}"></button></h2>
       <div class="note" style="color:var(--text)">${t('يسمح بملفات مكتوبة لجهاز ثاني أو أندرويد ثاني أو كيرنل ثاني، بعد ما تكتب اسم القسم.', 'Allows files made for another device, Android version or kernel, once you type the partition name.')}</div>
       <div class="note" style="margin-top:6px;color:var(--danger)">${t('الملفات الخبيثة أو التالفة أو نسخ جوال ثاني تبقى ممنوعة دايماً.', 'Harmful or damaged files, and other phones’ backups, are always refused.')}</div></div>
   </main>` + nav();
@@ -476,7 +486,7 @@ P.logs = () => {
   const lines = st.logs.map(l => { const m = /^(\d\d:\d\d:\d\d) (.*)$/.exec(l); return m ? `<span class="t">${m[1]}</span> <span class="${cls(m[2])}">${esc(m[2])}</span>` : esc(l); });
   return head(t('السجل', 'Logs'), t('كل أمر تنفذ وكل نتيجة', 'Every command run and its result'), `<button class="chip" data-act="copyLogs">${t('نسخ', 'Copy')}</button>`, true) + `<main>
     <div class="card"><div class="log">${lines.join('\n') || t('السجل فاضي', 'The log is empty')}</div></div>
-    <button class="btn sm" data-act="logs">${svg('refresh')}<span>${t('تحديث', 'Refresh')}</span></button></main>` + nav();
+    <div class="row2"><button class="btn sm" data-act="logs">${svg('refresh')}<span>${t('تحديث', 'Refresh')}</span></button><button class="btn sm" data-act="saveLogs">${svg('backup')}<span>${M.saveLog()}</span></button></div></main>` + nav();
 };
 
 P.about = () => head(t('حول', 'About'), 'Fastboot Studio Mobile', '', true) + `<main>
@@ -501,6 +511,10 @@ const S = {};
 S.confirm = sh => {
   const c = sh.check.check, typed = sh.check.typed, ctx = sh.ctx;
   const go = { image: 'doFlash', kernel: 'doKernel', otg: 'doOtg' }[ctx];
+  // Every confirmation names what is about to be written: the partition, its slot, and which phone.
+  const part = ctx === 'kernel' ? typed + ((st.phone && st.phone.slot) || '') : sh.check.partition;
+  const partSlot = /_[ab]$/.test(part) ? part.slice(-2) : '';
+  const target = `<div class="note" style="color:var(--text)">${ctx === 'otg' ? M.targetOtg(part, partSlot, st.o.phone ? st.o.phone.serial : '') : M.targetThis(part, partSlot)}</div>`;
   if (c.verdict === 'block') {
     const over = c.items.some(i => i.level === 'block' && i.override);
     const hard = c.items.some(i => i.level === 'block' && !i.override);
@@ -515,8 +529,9 @@ S.confirm = sh => {
     return sheet('warn', `<div class="banner warn">${svg('warn')}<div class="body"><div class="big">${dev ? t('وضع المطور: الملف مكتوب لجهاز ثاني', 'Developer mode: made for another device') : t('انتبه: ما نقدر نتأكد من الملف', 'Careful: this file cannot be confirmed')}</div>
       <div class="note">${dev ? t('عادةً هذا ممنوع. تقدر تكمل على مسؤوليتك، والنسخة الاحتياطية ترجّع القسم.', 'Normally refused. You may go ahead at your own risk; the backup puts the partition back.') : t('ما فيه بصمة تثبت إنه الملف الصحيح لجوالك، فلازم تأكيدك.', 'Nothing proves it is the right file for your phone, so it needs your confirmation.')}</div></div></div>
       <div class="card" style="padding:10px 14px">${checkRows(c, ctx)}</div>
+      ${target}
       <div class="note">${t(`للمتابعة اكتب اسم القسم ${LE(typed)}:`, `To go ahead, type the partition name ${esc(typed)}:`)}</div>
-      <input class="typed" data-in="typed" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${esc(typed)}">
+      <input class="typed" data-in="typed" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${esc(typed)}" aria-label="${t('اسم القسم', 'Partition name')}">
       <div class="row2"><button class="btn" data-act="sheetClose"><span>${t('إلغاء', 'Cancel')}</span></button><button class="btn warnb" id="typedGo" data-act="${go}" disabled><span>${dev ? t('فلّش على مسؤوليتي', 'Flash at my own risk') : t('فلّش', 'Flash')}</span></button></div>`);
   }
   if (c.verdict === 'ok') {
@@ -525,10 +540,12 @@ S.confirm = sh => {
       : ctx === 'otg' ? t(`كتابة ${LE(sh.check.partition)} على الجوال الموصول`, `Write ${esc(sh.check.partition)} to the connected phone`)
       : t(`كتابة ${LE(sh.check.partition)} على هذا الجوال`, `Write ${esc(sh.check.partition)} on this phone`);
     return sheet('accent', `<div class="banner ok">${svg('shield')}<div class="body"><div class="big">${t('الملف مطابق ✓', 'The file checks out ✓')}</div><div class="note">${where}${ctx !== 'otg' && st.s.backupFirst ? t('، بعد نسخة احتياطية من القسم الحالي.', ', after a backup of the current partition.') : '.'}</div></div></div>
+      ${target}
       <div class="row2"><button class="btn" data-act="sheetClose"><span>${t('إلغاء', 'Cancel')}</span></button><button class="btn primary" data-act="${go}"><span>${t('فلّش', 'Flash')}</span></button></div>`);
   }
   return sheet('notice', `<div class="banner info">${svg('info')}<div class="body"><div class="big">${t('تنبيه خفيف', 'Worth knowing')}</div><div class="note">${t('الملف سليم، بس فيه شي مختلف عن اللي شغّال الحين. أنت تختار.', 'The file is fine, but something differs from what runs now. Your call.')}</div></div></div>
     <div class="card" style="padding:10px 14px">${checkRows(c, ctx)}</div>
+    ${target}
     <div class="row2"><button class="btn" data-act="sheetClose"><span>${t('إلغاء', 'Cancel')}</span></button><button class="btn primary" data-act="${go}" data-notice="1"><span>${t('أكمل', 'Continue')}</span></button></div>`);
 };
 
@@ -552,9 +569,15 @@ S.restore = sh => {
 
 S.newBackup = () => {
   const p = st.phone || {};
+  // What it takes against what is free: a backup that cannot fit is not offered (and the app refuses it anyway).
+  const sp = st.space, MARGIN = 1048576;
+  const known = sp && sp.free != null && sp.need != null;
+  const short = known && sp.need + MARGIN > sp.free, shortBoth = sp && sp.free != null && sp.needBoth != null && sp.needBoth + MARGIN > sp.free;
+  const space = !sp ? `<div class="note">${M.spaceReading()}</div>` : known ? `<div class="note" style="color:var(--text)">${M.spaceLine(sp.need, sp.free)}${p.ab && sp.needBoth != null ? ' · ' + M.spaceBoth(sp.needBoth) : ''}</div>${short ? `<div class="banner warn" role="alert">${svg('warn')}<div class="body note">${M.spaceShort()}</div></div>` : ''}` : '';
   return sheet('accent', `<h3>${t('نسخة جديدة', 'New backup')}</h3><div class="note">${t(`ينسخ أقسام الإقلاع (${L((p.targets || []).join(', '))}) إلى ${LE(st.backupRoot)}`, `Copies the boot partitions (${esc((p.targets || []).join(', '))}) to ${esc(st.backupRoot)}`)}</div>
-    <button class="btn primary" data-act="doBackup" data-v="0"><span>${p.ab ? t(`السلوت الحالي ${LE(p.slot)}`, `The current slot ${esc(p.slot)}`) : t('ابدأ', 'Start')}</span></button>
-    ${p.ab ? `<button class="btn" data-act="doBackup" data-v="1"><span>${t('السلوتين a و b', 'Both slots, a and b')}</span></button>` : ''}
+    ${space}
+    <button class="btn primary" data-act="doBackup" data-v="0" ${short ? 'disabled' : ''}><span>${p.ab ? t(`السلوت الحالي ${LE(p.slot)}`, `The current slot ${esc(p.slot)}`) : t('ابدأ', 'Start')}</span></button>
+    ${p.ab ? `<button class="btn" data-act="doBackup" data-v="1" ${shortBoth ? 'disabled' : ''}><span>${t('السلوتين a و b', 'Both slots, a and b')}</span></button>` : ''}
     ${st.comp && st.comp.usable ? `<div class="label" style="margin-top:4px">${t('من الإضافة (Companion)', 'With the Companion module')}</div>
     <button class="btn" data-act="compBackup" data-v="critical"><span>${t('حرجة: البوت لودر والمودم و persist', 'Critical: bootloader chain, modem, persist')}</span></button>
     <button class="btn" data-act="compBackup" data-v="full"><span>${t('كاملة: كل شي إلا userdata', 'Full: everything but userdata')}</span></button>
@@ -586,7 +609,7 @@ function render() {
   const sheetScroll = sheetEl ? sheetEl.scrollTop : 0;
   const typedEl = root.querySelector('[data-in=typed]');
   const typed = typedEl ? typedEl.value : null, typedFocus = typedEl && document.activeElement === typedEl;
-  root.innerHTML = P[st.tab]() + (st.sheet ? S[st.sheet.type](st.sheet) : '') + (st.toast ? `<div class="toast">${st.toast}</div>` : '');
+  root.innerHTML = P[st.tab]() + (st.sheet ? S[st.sheet.type](st.sheet) : '') + (st.toast ? `<div class="toast" role="status" aria-live="polite">${st.toast}</div>` : '');
   const m = root.querySelector('main');
   if (m) m.scrollTop = scroll;
   const sh = root.querySelector('.sheet');
@@ -711,25 +734,53 @@ function consent(el) {
   return { notice: !!(el && el.dataset.notice), typed: input ? input.value.trim() : null };
 }
 
+// How a job ended: its result (a result with an error in it is a failure too), or the error the call gave.
+function endRun(r, out, error) {
+  if (error) { r.state = 'failed'; r.error = error; return; }
+  r.outcome = out;
+  if (out && out.backup) r.backup = out.backup;
+  if (out && out.sha256) r.sha256 = out.sha256;
+  if (out && out.name) r.name = out.name;
+  r.state = out && out.error ? 'failed' : 'done';
+  r.error = out && out.error;
+}
+
+// A job that was already running when this page was made (Android made the activity again): the app kept its steps.
+let earlyEnd = null;
+async function reattach() {
+  let s;
+  try { s = await call('run.state'); } catch (e) { return; }
+  if (!s || !s.meta) return;
+  const r = st.run = Object.assign({ backupFirst: st.s.backupFirst, readBack: st.s.readBack }, s.meta, { lines: s.lines || [], state: 'running', attached: true });
+  if (s.total) { r.sent = s.sent; r.total = s.total; }
+  const saved = r.lines.map(l => /^backup ok (.*)$/.exec(l)).filter(Boolean).pop();
+  if (saved) r.backup = saved[1].split('/').pop();
+  if (s.state === 'ended') endRun(r, s.result, s.error);
+  else if (earlyEnd) endRun(r, earlyEnd.result, earlyEnd.error);
+  if (r.where) { st.tab = r.where; st.page = null; }
+}
+on('runEnd', d => {
+  const r = st.run;
+  // The page that started the job gets its answer from the call itself; this is for the one that came back to it.
+  if (!r) { earlyEnd = d; return; }
+  if (!r.attached || r.state !== 'running') return;
+  endRun(r, d && d.result, d && d.error);
+  render();
+  if (st.phone && st.phone.root) loadBackups();
+});
+
 // One flash at a time; steps arrive through fbsEvent('progress').
 async function startRun(run, method, args, after) {
   st.sheet = null;
   // A second one started from another tab would take the first one's steps and result.
   if (st.run && st.run.state === 'running') { toast(errText('busy')); return; }
-  const r = st.run = Object.assign({ lines: [], state: 'running', backupFirst: st.s.backupFirst, readBack: st.s.readBack }, run);
+  const meta = Object.assign({ backupFirst: st.s.backupFirst, readBack: st.s.readBack }, run);
+  const r = st.run = Object.assign({ lines: [], state: 'running' }, meta);
+  earlyEnd = null;
   render();
-  try {
-    const out = await call(method, args);
-    r.outcome = out;
-    if (out && out.backup) r.backup = out.backup;
-    if (out && out.sha256) r.sha256 = out.sha256;
-    if (out && out.name) r.name = out.name;
-    r.state = out && out.error ? 'failed' : 'done';
-    r.error = out && out.error;
-  } catch (e) {
-    r.state = 'failed';
-    r.error = e.message;
-  }
+  // "run" is what this page shows for the job: the app keeps it with the steps, for a page made again while the job runs.
+  try { endRun(r, await call(method, Object.assign({}, args, { run: meta })), null); }
+  catch (e) { endRun(r, null, e.message || 'internal'); }
   render();
   if (after) after();
 }
@@ -822,13 +873,15 @@ const actions = {
   runClose: () => {
     const r = st.run;
     st.run = null;
+    call('run.clear').catch(() => {});
     if (r && r.kind === 'image') checkImage();
     if (r && r.kind === 'kernel' && st.k) checkKernel();
-    if (r && r.kind === 'otg') checkOtg();
+    if (r && r.kind === 'otg') { checkOtg(); scanOtg(); }
     render();
   },
   restoreFrom: el => {
     st.run = null;
+    call('run.clear').catch(() => {});
     const name = el.dataset.v;
     if (el.dataset.file) { actions.useBackup({ dataset: { v: name, file: el.dataset.file } }); return; }
     st.tab = 'backup'; st.bkOpen = name; st.sheet = { type: 'restore', name }; render(); loadBackups();
@@ -845,12 +898,15 @@ const actions = {
     try { const r = await call('companion.bundle'); toast(t(`انحفظ التقرير (الرقم و IMEI مخفية): ${LE(r.file)}`, `Report saved (serial and IMEI masked): ${esc(r.file)}`)); }
     catch (e) { fail(e); }
   },
-  bkNew: () => { st.sheet = { type: 'newBackup' }; render(); },
+  bkNew: () => {
+    st.sheet = { type: 'newBackup' }; st.space = null; render();
+    call('backup.space').then(r => { st.space = r || {}; render(); }).catch(() => { st.space = {}; render(); });
+  },
   doBackup: el => startRun({ kind: 'backup', where: 'backup' }, 'backup.create', { both: el.dataset.v === '1' }, () => loadBackups()),
   bkVerify: async el => {
     const name = el.dataset.v;
     st.bk[name] = 'run'; render();
-    try { const r = await call('backup.verify', { name }); st.bk[name] = r.failed.length ? { failed: r.failed } : 'ok'; }
+    try { const r = await call('backup.verify', { name }); st.bk[name] = r.failed.length ? { failed: r.failed } : 'ok'; st.bkRec[name] = !!r.recorded; }
     catch (e) { delete st.bk[name]; fail(e); }
     render();
   },
@@ -910,10 +966,20 @@ const actions = {
     const c = st.o.check;
     startRun({ kind: 'otg', where: 'otg', partition: c.partition, sent: 0, total: c.size, serial: st.o.phone.serial, sha256: c.check.sha256 }, 'otg.flash', Object.assign({ checkId: c.checkId }, consent(el)), () => { st.o.check = null; });
   },
+  otgCancel: async () => {
+    const r = st.run;
+    if (!r || r.kind !== 'otg' || r.state !== 'running' || r.cancelling) return;
+    r.cancelling = true; render();
+    try {
+      const x = await call('otg.cancel');
+      if (!x || !x.cancelled) { r.cancelling = false; if (r.state === 'running') toast(M.cancelTooLate()); }
+    } catch (e) { r.cancelling = false; fail(e); }
+  },
   otgReboot: async el => {
     try { await call('otg.reboot', { target: el.dataset.v || null }); toast(t('انرسل أمر التشغيل', 'Restart sent')); }
     catch (e) { fail(e); }
     st.run = null; st.o.phone = null; resetOtgFile(); scanOtg();
+    call('run.clear').catch(() => {});
   },
 
   set: async el => {
@@ -935,6 +1001,21 @@ const actions = {
   updCheck: () => checkUpdates(true),
   updHide: () => { st.upd.hidden = true; render(); },
   logs: async () => { try { st.logs = await call('logs'); } catch (e) { st.logs = []; } render(); },
+  saveLogs: async () => {
+    try { const r = await call('logs.save'); toast(r && r.saved ? M.logSaved() : M.logNotSaved()); }
+    catch (e) { fail(e); }
+  },
+  // The device page as plain lines, for a support message.
+  copyDevice: () => {
+    const p = st.phone;
+    if (!p) return;
+    const lines = [['Fastboot Studio Mobile', 'v' + st.version], [t('الموديل', 'Model'), p.name && p.name !== p.model ? `${p.name} (${p.model})` : p.model], [t('الاسم الرمزي', 'Codename'), p.codename], [t('المنتج', 'Product'), p.product],
+      [t('المعالج', 'Chip'), [p.vendor, p.platform, p.abi].filter(Boolean).join(' · ')], [t('أندرويد', 'Android'), `${p.android || '?'} (SDK ${p.sdk || '?'})`], [t('التصحيح الأمني', 'Security patch'), p.patch],
+      [t('السلوت', 'Slot'), [p.slot || t('بدون', 'none'), p.ab ? 'A/B' : null, p.dynamic ? 'dynamic' : null].filter(Boolean).join(' · ')], [t('الكيرنل', 'Kernel'), p.kernel], ['KMI', p.kmi],
+      [t('البوت لودر', 'Bootloader'), p.unlocked === true ? t('مفتوح', 'Unlocked') : p.unlocked === false ? t('مقفل', 'Locked') : t('غير معروف', 'Unknown')], ['AVB', p.avb], ['SELinux', p.selinux],
+      [t('الروت', 'Root'), p.root ? (p.rootManager || t('متاح', 'Granted')) : t('بدون روت', 'No root')], [t('الأقسام', 'Partitions'), (p.targets || []).join(', ')]];
+    call('copy', { text: lines.filter(l => l[1]).map(l => l[0] + ': ' + l[1]).join('\n') }).then(() => toast(M.detailsCopied())).catch(fail);
+  },
   copyLogs: () => call('copy', { text: st.logs.join('\n') }).then(() => toast(t('انسخ السجل', 'Log copied'))).catch(fail),
 };
 
@@ -982,6 +1063,7 @@ async function start() {
     const i = await call('init');
     st.s = i.settings; st.systemDark = i.systemDark; st.version = i.version || st.version; st.backupRoot = i.backupRoot || st.backupRoot;
   } catch (e) { console.error(e); }
+  await reattach();
   st.ready = true;
   applyLook();
   render();

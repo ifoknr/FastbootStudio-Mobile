@@ -1,6 +1,7 @@
 'use strict';
 // A pretend phone for previews and screenshots in a desktop browser. Not packed into the app.
 // ?lang=ar|en&theme=dark|light&root=0&dev=1&otg=1
+// &resume=1: the page comes back to a flash already running; &space=low: no room for a backup; &slow=1: a slow OTG send, to cancel.
 
 (function () {
   const q = new URLSearchParams(location.search);
@@ -25,7 +26,7 @@
   let pickIndex = 0;
   const logs = [];
   const log = l => logs.push(new Date().toTimeString().slice(0, 8) + ' ' + l);
-  let pending = null, otgPhone = null;
+  let pending = null, otgPhone = null, otgStop = false;
   const otgDevice = { id: '/dev/bus/usb/001/002', name: 'Android', maker: 'Xiaomi', vid: '18d1', pid: 'd00d', permitted: false, open: false };
 
   const item = (level, code, values, override) => ({ level, original: override && level === 'warn' ? 'block' : level, override: !!override, code, values: values || [] });
@@ -83,6 +84,8 @@
       await ev('backup ok /sdcard/FastbootStudio/Backups/23078PND5G_a1b2c3d4_20261018-101544', 900);
       await ev('write ' + p.partition + ' 8388608 bytes', 300);
       if (q.get('hold') === 'write') await new Promise(() => {});
+      await ev('written ' + p.partition, 600);
+      await ev('verify ' + p.partition, 100);
       await ev('verify ok ' + p.check.sha256, 1200);
       await ev('done ' + p.partition, 200);
       return { partition: p.partition, written: true, verified: true, backup: '23078PND5G_a1b2c3d4_20261018-101544', sha256: p.check.sha256 };
@@ -128,12 +131,23 @@
       window.fbsEvent('progress', { line: 'backup ok /sdcard/FastbootStudio/Backups/23078PND5G_a1b2c3d4_20261018-103000' });
       return { name: '23078PND5G_a1b2c3d4_20261018-103000' };
     },
-    'backup.verify': a => new Promise(r => setTimeout(() => r({ failed: a.name.includes('20260921') ? ['boot_a.img'] : [] }), 500)),
+    'backup.space': () => ({ free: q.get('space') === 'low' ? 52428800 : 48318382080, need: 125829120, needBoth: 251658240 }),
+    'backup.verify': a => new Promise(r => setTimeout(() => r({ failed: a.name.includes('20260921') ? ['boot_a.img'] : [], recorded: a.name.includes('20261009') }), 500)),
     'backup.delete': a => { const i = backups.findIndex(b => b.name === a.name); if (i >= 0) backups.splice(i, 1); return null; },
     'reboot': () => null,
     'logs': () => logs.concat(['10:15:41 $ id -u', '10:15:44 check init_boot_a.img -> init_boot_a: Ok', '10:15:44   Ok SamePhone 23078PND5G · a1b2c3d4', '10:15:44   Ok HashMatches 7f3a…c91e',
       '10:15:45 $ dd if=/data/user/0/…/init_boot_a.img of=/dev/block/by-name/init_boot_a bs=4194304 conv=notrunc,fsync && sync', '10:15:47 verify ok 7f3a…c91e', '10:15:47 done init_boot_a',
       '10:21:03 check Kernel-sweet-v2.1-AK3.zip -> boot: Block', '10:21:03   Block DeviceNotListed sweet, sweetin | corot']),
+    'logs.save': () => ({ saved: true }),
+    'run.state': () => {
+      if (q.get('resume') !== '1') return null;
+      const backup = '23078PND5G_a1b2c3d4_20261018-101544';
+      setTimeout(() => window.fbsEvent('progress', { line: 'written init_boot_a' }), 1200);
+      setTimeout(() => window.fbsEvent('runEnd', { result: { partition: 'init_boot_a', written: true, touched: true, verified: true, error: null, backup, sha256: sha('resume') }, error: null }), 2500);
+      return { meta: { kind: 'image', where: 'flash', partition: 'init_boot_a', size: 8388608, sha256: sha('resume'), backupFirst: true, readBack: true },
+        lines: ['check ok init_boot_a', 'backup init_boot_a', 'backup ok /sdcard/FastbootStudio/Backups/' + backup, 'write init_boot_a 8388608 bytes'], sent: 0, total: 0, state: 'running', result: null, error: null };
+    },
+    'run.clear': () => null,
     'copy': () => null,
     'open': () => null,
     'otg.scan': () => q.get('otg') === '1' ? [Object.assign({}, otgDevice, { open: !!otgPhone })] : [],
@@ -148,10 +162,15 @@
     'otg.flash': async a => {
       const p = pending; pending = null;
       if (!p || p.id !== a.checkId) throw 'check-expired';
-      for (let s = 0; s <= 64; s += 8) await new Promise(r => setTimeout(() => { window.fbsEvent('otgProgress', { sent: s * 1048576, total: 67108864 }); r(); }, 150));
+      otgStop = false;
+      for (let s = 0; s <= 64; s += 8) {
+        await new Promise(r => setTimeout(() => { window.fbsEvent('otgProgress', { sent: s * 1048576, total: 67108864 }); r(); }, q.get('slow') === '1' ? 900 : 150));
+        if (otgStop && s < 64) { otgPhone = null; throw 'cancelled'; }
+      }
       if (q.get('hold') === 'otg') await new Promise(() => {});
       return { partition: p.partition, sha256: p.check.sha256 };
     },
+    'otg.cancel': () => { otgStop = true; return { cancelled: true }; },
     'otg.reboot': () => { otgPhone = null; return null; },
     'otg.close': () => { otgPhone = null; return null; },
   };
