@@ -83,7 +83,12 @@ namespace FastbootStudio.Mobile.Core
             string reply = ReadReply(ReplyTimeout, out string kind);
             if (kind != "DATA")
                 throw new FastbootException(kind == "FAIL" ? reply : "unexpected reply to download: " + kind + reply);
-            long accepted = Convert.ToInt64(reply, 16);
+            long accepted;
+            try { accepted = Convert.ToInt64(reply.Trim(), 16); }
+            catch (Exception e) when (e is FormatException || e is OverflowException || e is ArgumentException)
+            {
+                throw new FastbootException("unexpected reply to download: DATA" + reply);
+            }
             if (accepted != length)
                 throw new FastbootException("the phone accepts " + accepted + " bytes, not " + length);
 

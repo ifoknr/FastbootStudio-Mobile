@@ -152,7 +152,8 @@ namespace FastbootStudio.Mobile
         /// <summary>Opens a link in the browser: only the project's own pages.</summary>
         public void Open(string url)
         {
-            if (url == null || !(url == "https://github.com/ifoknr" || url.StartsWith("https://github.com/ifoknr/", StringComparison.Ordinal) || url.StartsWith("https://t.me/", StringComparison.Ordinal)))
+            if (url == null || !(url == "https://github.com/ifoknr" || url.StartsWith("https://github.com/ifoknr/", StringComparison.Ordinal) || url.StartsWith("https://t.me/", StringComparison.Ordinal)
+                || url == "https://ifoknr.com" || url.StartsWith("https://ifoknr.com/", StringComparison.Ordinal)))
                 throw new BridgeError("bad-link");
             RunOnUiThread(() =>
             {
@@ -210,6 +211,8 @@ namespace FastbootStudio.Mobile
             catch (Exception e)
             {
                 Native.Log.Add("read " + uri + " failed: " + e.Message);
+                // Half a file is never left behind to be taken for the whole one later.
+                try { File.Delete(path); } catch (Exception) { }
                 return false;
             }
         }

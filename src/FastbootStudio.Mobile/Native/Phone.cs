@@ -107,7 +107,7 @@ namespace FastbootStudio.Mobile.Native
             if (!BackupListing.IsName(name))
                 return null;
             ShellResult r = su.Run("cd " + Sh.Q(RootFlasher.BackupRoot + "/" + name) + " && sha256sum -c SHA256SUMS 2>&1");
-            return BackupListing.Failed(r.Output + "\n" + r.Error);
+            return BackupListing.Failed(r.Output + "\n" + r.Error, r.Ok);
         }
 
         public bool Delete(string name)

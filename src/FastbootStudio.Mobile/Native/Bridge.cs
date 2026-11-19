@@ -35,7 +35,8 @@ namespace FastbootStudio.Mobile.Native
         readonly Otg otg;
         readonly Companion companion = new Companion(SuShell.Instance);
         readonly Ledger ledger;
-        readonly SemaphoreSlim busy = new SemaphoreSlim(1, 1);
+        // One for the whole app: when Android makes the activity again, a write started before still holds it.
+        static readonly SemaphoreSlim busy = new SemaphoreSlim(1, 1);
         readonly Dictionary<string, Picked> picked = new Dictionary<string, Picked>(StringComparer.Ordinal);
         Pending pending;
 
@@ -73,6 +74,9 @@ namespace FastbootStudio.Mobile.Native
         sealed class Pending
         {
             public string Id = Guid.NewGuid().ToString("N"), Kind, Path, Partition;
+
+            /// <summary>For an OTG check: the serial of the phone it was checked against.</summary>
+            public string Serial;
             public CheckResult Check;
             public AnyKernelZip Zip;
         }
@@ -494,6 +498,9 @@ namespace FastbootStudio.Mobile.Native
             string target = Json.Str(a, "target");
             if (target != null && target != "bootloader" && target != "recovery")
                 throw new BridgeError("bad-target");
+            // Never under a running write or backup.
+            if (busy.CurrentCount == 0)
+                throw new BridgeError("busy");
             SuShell.Instance.Run(target == null ? "svc power reboot || reboot" : "reboot " + target);
             return null;
         }
@@ -519,7 +526,9 @@ namespace FastbootStudio.Mobile.Native
                 request.Headers.Accept.ParseAdd("application/vnd.github+json");
                 System.Net.Http.HttpResponseMessage response;
                 try { response = await Http.SendAsync(request); }
-                catch (Exception e) when (e is System.Net.Http.HttpRequestException || e is TaskCanceledException)
+                // Android's handler reports no network as a WebException or a Java IOException, not an HttpRequestException.
+                catch (Exception e) when (e is System.Net.Http.HttpRequestException || e is TaskCanceledException
+                    || e is System.Net.WebException || e is IOException || e is Java.IO.IOException)
                 {
                     Log.Add("update check: " + e.Message);
                     throw new BridgeError("update-offline");
@@ -554,7 +563,7 @@ namespace FastbootStudio.Mobile.Native
                 throw new BridgeError("not-allowed");
             string partition = target.Target(baseName, Json.Bool(a, "other")) ?? throw new BridgeError("no-partition");
             long? bytes = target.Partitions.TryGetValue(partition, out long b) ? b : (long?)null;
-            Pending p = new Pending { Kind = "otg", Partition = partition };
+            Pending p = new Pending { Kind = "otg", Partition = partition, Serial = target.Serial };
             string token = Json.Str(a, "token");
             if (Json.Str(a, "source") == "folder")
             {
@@ -589,6 +598,10 @@ namespace FastbootStudio.Mobile.Native
         {
             Pending p = Take(a, "otg");
             inUse = p.Path;
+            // The check was made against one phone: it is not used for another one opened since.
+            OtgPhone now = otg.Phone ?? throw new BridgeError("usb-gone");
+            if (now.Serial != p.Serial)
+                throw new BridgeError("serial-mismatch");
             if (!RootFlasher.Allowed(p.Check, p.Partition, ConsentFrom(a, settings)))
                 throw new BridgeError("not-confirmed");
             long last = -1;

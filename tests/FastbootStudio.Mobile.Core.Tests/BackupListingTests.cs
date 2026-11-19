@@ -42,6 +42,15 @@ namespace FastbootStudio.Mobile.Core.Tests
             Assert.Equal(new[] { "boot_a.img" }, BackupListing.Failed(check));
         }
 
+        [Fact]
+        public void A_check_that_could_not_run_is_never_verified()
+        {
+            Assert.Equal(new[] { "SHA256SUMS" }, BackupListing.Failed("sha256sum: SHA256SUMS: No such file or directory\n", false));
+            Assert.Equal(new[] { "SHA256SUMS" }, BackupListing.Failed("", true));
+            Assert.Empty(BackupListing.Failed("boot_a.img: OK\n", true));
+            Assert.Equal(new[] { "boot_a.img" }, BackupListing.Failed("boot_a.img: FAILED\ninit_boot_a.img: OK\n", false));
+        }
+
         [Theory]
         [InlineData("Xiaomi_13T_Pro_a1b2c3d4_20261015-221804", true)]
         [InlineData(".partial-x", false)]

@@ -668,6 +668,8 @@ async function loadBackups() {
 
 async function checkImage() {
   const f = st.f;
+  // One check at a time: a change made while one runs is checked after it, so the page never shows the answer to an older question.
+  if (f.checking) { f.again = true; return; }
   f.check = null; f.err = null;
   if (!f.src || !f.base) { render(); return; }
   f.checking = true; render();
@@ -675,20 +677,24 @@ async function checkImage() {
   try { f.check = await call('flash.check', Object.assign(args, { base: f.base, other: f.other })); }
   catch (e) { f.err = e.message; }
   f.checking = false;
+  if (f.again) { f.again = false; checkImage(); return; }
   render();
 }
 
 async function checkKernel() {
   const k = st.k;
+  if (k.checking) { k.again = true; return; }
   k.check = null; k.err = null; k.checking = true; render();
   try { k.check = await call('kernel.check', { token: k.file.token, expected: k.expected }); }
   catch (e) { k.err = e.message; }
   k.checking = false;
+  if (k.again) { k.again = false; if (st.k === k) checkKernel(); return; }
   render();
 }
 
 async function checkOtg() {
   const o = st.o;
+  if (o.checking) { o.again = true; return; }
   o.check = null; o.err = null;
   if (!o.src || !o.base) { render(); return; }
   o.checking = true; render();
@@ -696,6 +702,7 @@ async function checkOtg() {
   try { o.check = await call('otg.check', Object.assign(args, { base: o.base, other: o.other })); }
   catch (e) { o.err = e.message; }
   o.checking = false;
+  if (o.again) { o.again = false; checkOtg(); return; }
   render();
 }
 
@@ -707,19 +714,21 @@ function consent(el) {
 // One flash at a time; steps arrive through fbsEvent('progress').
 async function startRun(run, method, args, after) {
   st.sheet = null;
-  st.run = Object.assign({ lines: [], state: 'running', backupFirst: st.s.backupFirst, readBack: st.s.readBack }, run);
+  // A second one started from another tab would take the first one's steps and result.
+  if (st.run && st.run.state === 'running') { toast(errText('busy')); return; }
+  const r = st.run = Object.assign({ lines: [], state: 'running', backupFirst: st.s.backupFirst, readBack: st.s.readBack }, run);
   render();
   try {
     const out = await call(method, args);
-    st.run.outcome = out;
-    if (out && out.backup) st.run.backup = out.backup;
-    if (out && out.sha256) st.run.sha256 = out.sha256;
-    if (out && out.name) st.run.name = out.name;
-    st.run.state = out && out.error ? 'failed' : 'done';
-    st.run.error = out && out.error;
+    r.outcome = out;
+    if (out && out.backup) r.backup = out.backup;
+    if (out && out.sha256) r.sha256 = out.sha256;
+    if (out && out.name) r.name = out.name;
+    r.state = out && out.error ? 'failed' : 'done';
+    r.error = out && out.error;
   } catch (e) {
-    st.run.state = 'failed';
-    st.run.error = e.message;
+    r.state = 'failed';
+    r.error = e.message;
   }
   render();
   if (after) after();
@@ -859,6 +868,7 @@ const actions = {
   },
 
   otgConnect: async el => {
+    if (st.o.connecting) return;
     st.o.connecting = el.dataset.v; st.o.err = null; render();
     try { st.o.phone = await call('otg.connect', { id: el.dataset.v }); st.o.id = el.dataset.v; resetOtgFile(); st.o.base = null; }
     catch (e) { st.o.err = e.message; }

@@ -101,5 +101,18 @@ namespace FastbootStudio.Mobile.Core
         /// <summary>"sha256sum -c" output: the files reported FAILED (changed, missing or unreadable).</summary>
         public static List<string> Failed(string checkOutput) =>
             Sh.Lines(checkOutput).Where(l => l.Contains(": FAILED")).Select(l => l.Substring(0, l.IndexOf(": FAILED", StringComparison.Ordinal))).ToList();
+
+        /// <summary>
+        /// The same, with how the check ended. A check that ended badly without naming a file
+        /// (the folder or its SHA256SUMS is gone or unreadable), or that checked no file at all,
+        /// is never "verified": SHA256SUMS itself is reported.
+        /// </summary>
+        public static List<string> Failed(string checkOutput, bool exitOk)
+        {
+            List<string> failed = Failed(checkOutput);
+            if (failed.Count == 0 && (!exitOk || !Sh.Lines(checkOutput).Any(l => l.EndsWith(": OK", StringComparison.Ordinal))))
+                failed.Add(Sha256Sums.FileName);
+            return failed;
+        }
     }
 }

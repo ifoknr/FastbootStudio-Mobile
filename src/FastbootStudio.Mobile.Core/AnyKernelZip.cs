@@ -125,7 +125,10 @@ namespace FastbootStudio.Mobile.Core
             using (Stream s = installer.Open())
             {
                 byte[] head = new byte[4];
-                int n = s.Read(head, 0, 4);
+                // A packed stream may hand over fewer bytes than asked for: read until the four are in.
+                int n = 0, got;
+                while (n < 4 && (got = s.Read(head, n, 4 - n)) > 0)
+                    n += got;
                 if (n == 4 && head[0] == 0x7F && head[1] == (byte)'E' && head[2] == (byte)'L' && head[3] == (byte)'F')
                 {
                     result.Add(CheckLevel.Block, CheckCode.DangerousScript, "binary", Installer, "");
