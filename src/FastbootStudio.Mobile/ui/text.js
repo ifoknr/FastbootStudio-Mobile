@@ -11,6 +11,8 @@ const short = sha => sha && sha.length > 12 ? sha.slice(0, 4) + '…' + sha.slic
 const baseOf = p => p && /_[ab]$/.test(p) ? p.slice(0, -2) : p;
 const mib = bytes => {
   if (bytes == null || bytes < 0) return '';
+  // From 10 GiB up, a count in MiB ("46080 MiB") is harder to read than it is useful.
+  if (bytes >= 10737418240) return (bytes / 1073741824).toFixed(1).replace(/\.0$/, '') + ' GiB';
   if (bytes >= 1048576) return (bytes / 1048576).toFixed(bytes >= 104857600 ? 0 : 1).replace(/\.0$/, '') + ' MiB';
   if (bytes >= 1024) return Math.round(bytes / 1024) + ' KiB';
   return bytes + ' B';
