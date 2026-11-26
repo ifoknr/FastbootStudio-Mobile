@@ -17,5 +17,10 @@
       <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Writing a boot partition or copying partitions to a backup, on this phone as root or on another phone over USB: it must not be cut off half-way." />
     </service>
+    <!-- For the share sheet: serves only the files in the app's cache "export" folder, read-only, and only to the
+         app a share was sent to (Native/ExportProvider.cs). Not exported. -->
+    <provider android:name="com.ifoknr.fastbootstudio.mobile.ExportProvider"
+              android:authorities="com.ifoknr.fastbootstudio.mobile.files"
+              android:exported="false" android:grantUriPermissions="true" />
   </application>
 </manifest>

@@ -259,6 +259,88 @@ namespace FastbootStudio.Mobile.Core.Tests
         }
     }
 
+    public class PreflightSessionTests
+    {
+        static List<PreflightItem> Items(params string[] levels) => levels.Select((l, i) => new PreflightItem("item" + i, l)).ToList();
+
+        [Fact]
+        public void No_write_before_the_list_passed_and_then_it_is_not_shown_again()
+        {
+            PreflightSession s = new PreflightSession();
+            Assert.False(s.MayWrite);
+            Assert.True(s.Needed(Items("pass", "pass")));
+            Assert.True(s.Acknowledge(Items("pass", "pass"), false));
+            Assert.True(s.MayWrite);
+            // The rest of this run of the app: not shown again, also when a warning turns up later.
+            Assert.False(s.Needed(Items("pass", "pass")));
+            Assert.False(s.Needed(Items("pass", "warn")));
+            Assert.True(s.MayWrite);
+            // The app starts anew: it is shown again.
+            Assert.True(new PreflightSession().Needed(Items("pass")));
+        }
+
+        [Fact]
+        public void Warnings_need_the_tick_and_a_failure_never_passes()
+        {
+            PreflightSession s = new PreflightSession();
+            Assert.False(s.Acknowledge(Items("pass", "warn"), false));
+            Assert.False(s.MayWrite);
+            Assert.True(s.Acknowledge(Items("pass", "warn"), true));
+            Assert.True(s.MayWrite);
+            Assert.False(new PreflightSession().Acknowledge(Items("fail", "pass"), true));
+        }
+
+        [Fact]
+        public void A_failure_always_brings_the_list_back_and_takes_the_pass_away()
+        {
+            PreflightSession s = new PreflightSession();
+            s.Acknowledge(Items("pass"), false);
+            Assert.True(s.Needed(Items("pass", "fail")));
+            Assert.False(s.MayWrite);
+            // Still shown once the failure is gone, until it is read and passed again.
+            Assert.True(s.Needed(Items("pass", "pass")));
+            Assert.False(s.Acknowledge(Items("fail"), true));
+            Assert.True(s.Acknowledge(Items("pass"), false));
+            Assert.False(s.Needed(Items("pass")));
+        }
+    }
+
+    public class ExportFolderTests
+    {
+        [Fact]
+        public void Only_a_plain_file_right_in_the_folder_is_handed_out()
+        {
+            using Samples s = new Samples();
+            string folder = Path.Combine(s.Root, "export"), outside = Path.Combine(s.Root, "secret.txt");
+            Directory.CreateDirectory(Path.Combine(folder, "sub"));
+            File.WriteAllText(Path.Combine(folder, "backup.tar"), "tar");
+            File.WriteAllText(Path.Combine(folder, "sub", "inner.tar"), "x");
+            File.WriteAllText(outside, "secret");
+            Assert.Equal(Path.Combine(folder, "backup.tar"), ExportFolder.Resolve(folder, "backup.tar"));
+            Assert.Equal(Path.Combine(folder, "backup.tar"), ExportFolder.Resolve(folder + "/", "backup.tar"));
+            foreach (string bad in new[] { "../secret.txt", "..", ".", "", null, "sub/inner.tar", "sub", "/etc/passwd", outside, "missing.tar", "a\\b", "backup.tar/../../secret.txt" })
+                Assert.Null(ExportFolder.Resolve(folder, bad));
+            // A link in the folder, to a file outside it or even to one inside it, is not followed.
+            File.CreateSymbolicLink(Path.Combine(folder, "link.tar"), outside);
+            File.CreateSymbolicLink(Path.Combine(folder, "self.tar"), Path.Combine(folder, "backup.tar"));
+            Directory.CreateSymbolicLink(Path.Combine(folder, "dir"), s.Root);
+            Assert.Null(ExportFolder.Resolve(folder, "link.tar"));
+            Assert.Null(ExportFolder.Resolve(folder, "self.tar"));
+            Assert.Null(ExportFolder.Resolve(folder, "dir"));
+            Assert.Null(ExportFolder.Resolve(null, "backup.tar"));
+
+            Assert.Equal("application/x-tar", ExportFolder.TypeOf("Backup.TAR"));
+            Assert.Equal("text/plain", ExportFolder.TypeOf("log.txt"));
+            Assert.Equal("application/octet-stream", ExportFolder.TypeOf("x.img"));
+
+            // Old exports go; what a link points at stays.
+            ExportFolder.Clear(folder);
+            Assert.Empty(Directory.GetFileSystemEntries(folder));
+            Assert.True(File.Exists(outside));
+            Assert.True(Directory.Exists(ExportFolder.Clear(Path.Combine(s.Root, "new"))));
+        }
+    }
+
     public class TarTests
     {
         static string Sha(byte[] data)

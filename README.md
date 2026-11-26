@@ -64,7 +64,7 @@ vendor_boot, dtbo, vbmeta, vbmeta_system, recovery) and the slot. The check runs
 says in plain words what it found. Every flash asks first, naming the partition and the slot,
 and the current partition is backed up before it is written. While it runs, a notification keeps
 the job alive if you leave the app, and the page picks it up again when you come back. Before the
-first write of a session a short list shows what is ready and what is not (battery, root,
+first write after the app starts a short list shows what is ready and what is not (battery, root,
 bootloader, a backup, free space): a failure stops the write, a warning asks for a tick.
 
 ### 🧩 Kernels (AnyKernel3)
@@ -84,8 +84,9 @@ backup shows what it needs against the free space, and is not started when it ca
 **Restore the whole backup** puts a backup the app made of this phone back in one go: you see the
 plan first (what is written where, what is left out and why; the other slot and vbmeta only when
 you tick them), each image gets the same check as a single flash, and it stops at the first
-failure and says what was written. **Export as one file** saves a backup as a single `.tar` where
-you choose, and reads it back to check every image's SHA-256.
+failure and says what was written. **Save as one file** / **Share as one file** turn a backup into a
+single `.tar`, saved where you choose or sent through the share sheet, and read back first to
+check every image's SHA-256.
 
 ### 🔌 OTG
 Connect another phone in fastboot mode with a USB OTG cable: the app reads its partitions and

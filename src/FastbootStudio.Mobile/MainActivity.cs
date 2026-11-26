@@ -243,6 +243,28 @@ namespace FastbootStudio.Mobile
                 pick?.TrySetResult(resultCode == Result.Ok ? data?.Data : null);
         }
 
+        /// <summary>
+        /// Opens the share sheet for a file in the export folder (by its name there). The app the
+        /// person picks may read that one file, through <see cref="ExportProvider"/>, and nothing else.
+        /// </summary>
+        public void ShareExport(string name)
+        {
+            Android.Net.Uri uri = ExportProvider.UriFor(name);
+            Intent send = new Intent(Intent.ActionSend);
+            send.SetType(FastbootStudio.Mobile.Core.ExportFolder.TypeOf(name));
+            send.PutExtra(Intent.ExtraStream, uri);
+            // In the clip as well, which is what carries the permission through the chooser.
+            send.ClipData = ClipData.NewRawUri(name, uri);
+            send.AddFlags(ActivityFlags.GrantReadUriPermission);
+            Intent chooser = Intent.CreateChooser(send, (string)null);
+            chooser.AddFlags(ActivityFlags.GrantReadUriPermission);
+            RunOnUiThread(() =>
+            {
+                try { StartActivity(chooser); }
+                catch (ActivityNotFoundException e) { Native.Log.Add("share: " + e.Message); }
+            });
+        }
+
         /// <summary>Asks where to save a file (the system's own "save" page). Null when cancelled.</summary>
         public Task<Android.Net.Uri> CreateDocument(string name, string type)
         {

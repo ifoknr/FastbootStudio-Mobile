@@ -162,7 +162,8 @@
       : q.get('otg') === 'side' ? [{ mode: 'adb', id: '/dev/bus/usb/001/003', name: 'Redmi Note 12', maker: 'Xiaomi', vid: '18d1', pid: 'd001', permitted: true, open: false }] : [],
     'preflight': a => {
       const pf = q.get('pf');
-      if (!pf || preflightSkip) return { needed: false };
+      // Like the app: once it has passed it is not shown again; a failure always shows it.
+      if (!pf || (preflightSkip && pf !== 'fail')) return { needed: false };
       const otg = a.kind === 'otg' || a.kind === 'sideload';
       const items = [{ code: 'battery', level: pf === 'fail' ? 'fail' : 'pass', values: pf === 'fail' ? ['low', '31', '50', 'on-battery'] : ['ok', '82', '50', 'charging'] }].concat(otg
         ? [{ code: 'otg-serial', level: a.kind === 'sideload' ? 'warn' : 'pass', values: a.kind === 'sideload' ? ['none'] : ['ok', '9f8e7d6c'] }].concat(a.kind === 'otg' ? [{ code: 'otg-bootloader', level: pf === 'pass' ? 'pass' : 'warn', values: [pf === 'pass' ? 'unlocked' : 'locked'] }] : [])
@@ -170,7 +171,7 @@
           { code: 'backup', level: 'pass', values: [pf === 'pass' ? 'today' : 'automatic'] }, { code: 'space', level: 'pass', values: ['ok', '8388608', '48318382080'] }]);
       return { needed: true, blocked: items.some(i => i.level === 'fail'), allPass: items.every(i => i.level === 'pass'), items };
     },
-    'preflight.ack': a => { if (a.skip) preflightSkip = true; return null; },
+    'preflight.ack': () => { preflightSkip = true; return null; },
     'restore.plan': async a => {
       const b = backups.find(x => x.name === a.name);
       if (q.get('refuse') === '1' || !b.mine) return { refused: b.mine ? 'not-recorded' : 'other-phone', name: a.name, serial: b.serial, model: b.model };
@@ -209,6 +210,8 @@
     },
     'backup.export': a => new Promise(r => setTimeout(() => r({ saved: true, files: backups.find(b => b.name === a.name).files.length }), q.get('hold') === 'export' ? 1e9 : 1200)),
     'logs.export': () => ({ saved: true }),
+    'backup.share': a => new Promise(r => setTimeout(() => r({ shared: true, files: backups.find(b => b.name === a.name).files.length }), q.get('hold') === 'share' ? 1e9 : 1200)),
+    'logs.share': () => ({ shared: true }),
     'sideload.run': async a => {
       const total = 1288490188;
       otgStop = false;

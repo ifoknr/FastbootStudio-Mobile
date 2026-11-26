@@ -52,6 +52,46 @@ namespace FastbootStudio.Mobile.Core
     }
 
     /// <summary>
+    /// The rule for one run of the app: the list is shown before the first write, and once it
+    /// has passed (nothing failed, the warnings ticked) it is not shown again until the app
+    /// starts anew. A failure always brings it back, and takes the pass away until it is
+    /// read again. No write happens before a pass.
+    /// </summary>
+    public sealed class PreflightSession
+    {
+        readonly object gate = new object();
+        bool passed;
+
+        /// <summary>A write may go ahead: the list passed in this run of the app, and nothing has failed since.</summary>
+        public bool MayWrite { get { lock (gate) return passed; } }
+
+        /// <summary>Whether the list has to be shown now, for what it says at this moment.</summary>
+        public bool Needed(IEnumerable<PreflightItem> items)
+        {
+            lock (gate)
+            {
+                if (Preflight.Blocked(items))
+                    passed = false;
+                return !passed;
+            }
+        }
+
+        /// <summary>
+        /// The person read the list and goes on. False (and no pass) when something on it fails,
+        /// or when it has warnings and they were not ticked.
+        /// </summary>
+        public bool Acknowledge(IEnumerable<PreflightItem> items, bool warningsAccepted)
+        {
+            lock (gate)
+            {
+                List<PreflightItem> list = items.ToList();
+                passed = !Preflight.Blocked(list) && (Preflight.AllPass(list) || warningsAccepted);
+                return passed;
+            }
+        }
+    }
+
+    /// <summary>
     /// The list shown before the first write of a session. It adds to the checks every flash
     /// already gets and replaces none of them: a pass here writes nothing by itself.
     /// </summary>

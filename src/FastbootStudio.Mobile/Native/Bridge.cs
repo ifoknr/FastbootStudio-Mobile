@@ -52,8 +52,8 @@ namespace FastbootStudio.Mobile.Native
         // whole app, so the page cannot skip it: a write is refused until the list was shown and
         // nothing on it failed. "skip" is set only when everything passed and the person asked
         // not to see it again; otherwise each showing allows one write.
-        static readonly object preflightGate = new object();
-        static bool preflightSkip, preflightShown;
+        static readonly PreflightSession preflight = new PreflightSession();
+        static int exportsCleared;
 
         /// <summary>The file a running flash reads: never cleaned up under it.</summary>
         static volatile string inUse;
@@ -133,6 +133,10 @@ namespace FastbootStudio.Mobile.Native
             this.settings = settings;
             this.otg = otg;
             ledger = new Ledger(activity.FilesDir.AbsolutePath);
+            // What was shared before the app last closed has been read by now: the export folder starts empty.
+            // Once for each start of the app, not each time the activity is made again (an app may still be reading).
+            if (System.Threading.Interlocked.Exchange(ref exportsCleared, 1) == 0)
+                ExportFolder.Clear(ExportProvider.Folder(activity));
         }
 
         /// <summary>Keeps, in the app's own storage, the SHA-256s of a backup the app (or the module, from the app) just made.</summary>
@@ -239,6 +243,10 @@ namespace FastbootStudio.Mobile.Native
                     return await BackupExport(a);
                 case "logs.export":
                     return await SupportExport();
+                case "backup.share":
+                    return BackupShare(a);
+                case "logs.share":
+                    return SupportShare();
                 case "restore.plan":
                     return RestorePlan(a);
                 case "restore.run":
@@ -445,10 +453,10 @@ namespace FastbootStudio.Mobile.Native
         JsonNode PreflightList(JsonObject a)
         {
             string kind = PreflightKind(a);
-            lock (preflightGate)
-                if (preflightSkip)
-                    return new JsonObject { ["needed"] = false };
             List<PreflightItem> items = PreflightItems(kind);
+            // Once it has passed in this run of the app it is not shown again; a failure always shows it.
+            if (!preflight.Needed(items))
+                return new JsonObject { ["needed"] = false };
             return new JsonObject
             {
                 ["needed"] = true, ["blocked"] = Preflight.Blocked(items), ["allPass"] = Preflight.AllPass(items),
@@ -466,30 +474,17 @@ namespace FastbootStudio.Mobile.Native
             List<PreflightItem> items = PreflightItems(PreflightKind(a));
             if (Preflight.Blocked(items))
                 throw new BridgeError("preflight-blocked");
-            bool clean = Preflight.AllPass(items);
-            if (!clean && !Json.Bool(a, "accept"))
+            if (!preflight.Acknowledge(items, Json.Bool(a, "accept")))
                 throw new BridgeError("not-confirmed");
-            lock (preflightGate)
-            {
-                preflightShown = true;
-                if (clean && Json.Bool(a, "skip"))
-                    preflightSkip = true;
-            }
             Log.Add("pre-flight: " + string.Join(", ", items.Select(i => i.Code + " " + i.Level)));
             return null;
         }
 
-        /// <summary>No write before the list was shown; one showing, one write.</summary>
+        /// <summary>No write before the list has passed in this run of the app (and none after a failure, until it passes again).</summary>
         static void RequirePreflight()
         {
-            lock (preflightGate)
-            {
-                if (preflightSkip)
-                    return;
-                if (!preflightShown)
-                    throw new BridgeError("preflight-needed");
-                preflightShown = false;
-            }
+            if (!preflight.MayWrite)
+                throw new BridgeError("preflight-needed");
         }
 
         static Consent ConsentFrom(JsonObject a, Settings settings) => new Consent
@@ -890,12 +885,7 @@ namespace FastbootStudio.Mobile.Native
                 List<string> bad = new List<string> { "SHA256SUMS" };
                 if (written)
                     using (Stream input = activity.OpenInput(uri))
-                    {
-                        Dictionary<string, string> inside = Tar.Hashes(input);
-                        bad = Tar.Mismatches(inside, e.Sums);
-                        if (ledger.Get(name) is IReadOnlyDictionary<string, string> recorded)
-                            bad.AddRange(Tar.Mismatches(inside, recorded).Where(f => !bad.Contains(f)));
-                    }
+                        bad = ArchiveMismatches(input, name, e);
                 if (!written || bad.Count > 0)
                 {
                     activity.Discard(uri);
@@ -917,6 +907,106 @@ namespace FastbootStudio.Mobile.Native
             }
         }
 
+        /// <summary>What does not match in a written archive: against SHA256SUMS, and against the app's own record when it has one.</summary>
+        List<string> ArchiveMismatches(Stream archive, string name, BackupEntry e)
+        {
+            Dictionary<string, string> inside = Tar.Hashes(archive);
+            List<string> bad = Tar.Mismatches(inside, e.Sums);
+            if (ledger.Get(name) is IReadOnlyDictionary<string, string> recorded)
+                bad.AddRange(Tar.Mismatches(inside, recorded).Where(f => !bad.Contains(f)));
+            return bad;
+        }
+
+        /// <summary>
+        /// The same archive, handed to another app through the share sheet: written into the
+        /// app's own export folder (emptied first), read back and checked like a saved one, then
+        /// offered. The file stays until the next export or the next start, because the app it
+        /// is sent to reads it later.
+        /// </summary>
+        JsonNode BackupShare(JsonObject a)
+        {
+            RequireRoot();
+            string name = Json.Str(a, "name");
+            BackupEntry e = BackupListing.IsName(name) ? phone.Backups().FirstOrDefault(b => b.Name == name) : null;
+            if (e == null || e.Sums.Count == 0)
+                throw new BridgeError("backup-unreadable");
+            if (!busy.Wait(0))
+                throw new BridgeError("busy");
+            string file = name + ".tar", path = Path.Combine(ExportFolder.Clear(ExportProvider.Folder(activity)), file);
+            try
+            {
+                long? free = phone.Flasher.FreeBytes(activity.CacheDir.AbsolutePath);
+                if (free.HasValue && e.Kb * 1024 + RootFlasher.BackupMargin > free.Value)
+                    throw new BridgeError("no-space");
+                bool written;
+                using (FileStream output = File.Create(path))
+                    written = phone.ExportTar(name, output);
+                List<string> bad = new List<string> { "SHA256SUMS" };
+                if (written)
+                    using (FileStream input = File.OpenRead(path))
+                        bad = ArchiveMismatches(input, name, e);
+                if (!written || bad.Count > 0)
+                {
+                    Log.Add("share " + name + " failed: " + string.Join(", ", bad));
+                    throw new BridgeError("export-failed: " + string.Join(", ", bad));
+                }
+                Log.Add("share " + name + ": " + e.Sums.Count + " images in one archive, hashes checked");
+                activity.ShareExport(file);
+                return new JsonObject { ["shared"] = true, ["files"] = e.Sums.Count };
+            }
+            catch (Exception x) when (x is BridgeError || x is IOException || x is InvalidDataException)
+            {
+                try { File.Delete(path); } catch (IOException) { }
+                if (x is BridgeError)
+                    throw;
+                Log.Add("share " + name + " failed: " + x.Message);
+                throw new BridgeError("export-failed");
+            }
+            finally
+            {
+                busy.Release();
+            }
+        }
+
+        /// <summary>The support archive through the share sheet.</summary>
+        JsonNode SupportShare()
+        {
+            if (!busy.Wait(0))
+                throw new BridgeError("busy");
+            string file = "fastboot-studio-support-" + DateTime.Now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture) + ".tar";
+            string path = Path.Combine(ExportFolder.Clear(ExportProvider.Folder(activity)), file);
+            try
+            {
+                using (FileStream output = File.Create(path))
+                    WriteSupport(output);
+                using (FileStream input = File.OpenRead(path))
+                    if (Tar.Hashes(input).Count != 2)
+                        throw new InvalidDataException("not what was written");
+                activity.ShareExport(file);
+                return new JsonObject { ["shared"] = true };
+            }
+            catch (Exception x) when (x is IOException || x is InvalidDataException)
+            {
+                try { File.Delete(path); } catch (IOException) { }
+                Log.Add("support archive failed: " + x.Message);
+                throw new BridgeError("export-failed");
+            }
+            finally
+            {
+                busy.Release();
+            }
+        }
+
+        /// <summary>The log and the phone's details (serial masked), as the two files of a support archive.</summary>
+        void WriteSupport(Stream output)
+        {
+            byte[] log = System.Text.Encoding.UTF8.GetBytes(string.Join("\n", Log.All()) + "\n");
+            byte[] device = System.Text.Encoding.UTF8.GetBytes("Fastboot Studio Mobile " + activity.Version + "\n" + phone.LastDetails + "\n");
+            Tar.WriteFile(output, "log.txt", new MemoryStream(log), log.Length, DateTime.Now);
+            Tar.WriteFile(output, "device.txt", new MemoryStream(device), device.Length, DateTime.Now);
+            Tar.WriteEnd(output);
+        }
+
         /// <summary>The app's log and the phone's details (serial masked) as one small tar, for a support message.</summary>
         async Task<JsonNode> SupportExport()
         {
@@ -926,14 +1016,8 @@ namespace FastbootStudio.Mobile.Native
                 return new JsonObject { ["saved"] = false };
             try
             {
-                byte[] log = System.Text.Encoding.UTF8.GetBytes(string.Join("\n", Log.All()) + "\n");
-                byte[] device = System.Text.Encoding.UTF8.GetBytes("Fastboot Studio Mobile " + activity.Version + "\n" + phone.LastDetails + "\n");
                 using (Stream output = activity.OpenOutput(uri))
-                {
-                    Tar.WriteFile(output, "log.txt", new MemoryStream(log), log.Length, DateTime.Now);
-                    Tar.WriteFile(output, "device.txt", new MemoryStream(device), device.Length, DateTime.Now);
-                    Tar.WriteEnd(output);
-                }
+                    WriteSupport(output);
                 using (Stream input = activity.OpenInput(uri))
                     if (Tar.Hashes(input).Count != 2)
                         throw new InvalidDataException("not what was written");

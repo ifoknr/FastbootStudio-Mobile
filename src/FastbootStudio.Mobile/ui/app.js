@@ -430,8 +430,9 @@ P.backup = () => {
       ${s === 'ok' && st.bkRec[open.name] ? `<div class="note" style="margin-top:8px">${M.recordedOk()}</div>` : ''}
       ${open.mine ? '' : `<div class="note" style="margin-top:8px">${t(`النسخة لـ ${LE(open.model || '?')} · ${LE(open.serial || '?')}: تنفلش على جوالها بس (من OTG أو الكمبيوتر).`, `This backup is ${esc(open.model || '?')} · ${esc(open.serial || '?')}’s: it can only go back to that phone (OTG or a computer).`)}</div>`}
       <div class="${open.mine ? 'row3' : 'row2'}" style="margin-top:10px">${open.mine ? `<button class="btn sm" data-act="bkVerify" data-v="${esc(open.name)}"><span>${t('تحقق', 'Verify')}</span></button><button class="btn sm" data-act="bkRestore" data-v="${esc(open.name)}"><span>${t('استرجاع', 'Restore')}</span></button>` : ''}<button class="btn sm danger" data-act="bkDelete" data-v="${esc(open.name)}"><span>${t('حذف', 'Delete')}</span></button></div>
-      <div class="${open.mine ? 'row2' : ''}" style="margin-top:8px">${open.mine ? `<button class="btn sm" data-act="bkRestoreAll" data-v="${esc(open.name)}">${svg('restore')}<span>${M.restoreAll()}</span></button>` : ''}<button class="btn sm" data-act="bkExport" data-v="${esc(open.name)}" ${st.exporting ? 'disabled' : ''}>${st.exporting === open.name ? '<span class="spin" style="margin-inline-end:8px"></span>' : svg('backup')}<span>${M.exportOne()}</span></button></div>
-      ${st.exporting === open.name ? `<div class="note" style="margin-top:6px">${M.exporting()}</div>` : ''}</div>`;
+      ${open.mine ? `<button class="btn sm" style="margin-top:8px" data-act="bkRestoreAll" data-v="${esc(open.name)}">${svg('restore')}<span>${M.restoreAll()}</span></button>` : ''}
+      <div class="row2" style="margin-top:8px"><button class="btn sm" data-act="bkExport" data-v="${esc(open.name)}" ${st.exporting ? 'disabled' : ''}>${st.exporting === open.name && st.exportHow === 'save' ? '<span class="spin" style="margin-inline-end:8px"></span>' : svg('backup')}<span>${M.exportOne()}</span></button><button class="btn sm" data-act="bkShare" data-v="${esc(open.name)}" ${st.exporting ? 'disabled' : ''}>${st.exporting === open.name && st.exportHow === 'share' ? '<span class="spin" style="margin-inline-end:8px"></span>' : svg('tg')}<span>${M.shareBackup()}</span></button></div>
+      ${st.exporting === open.name ? `<div class="note" style="margin-top:6px">${st.exportHow === 'share' ? M.sharing() : M.exporting()}</div>` : ''}</div>`;
   }
   return top + `<main>
     <div class="row2"><button class="btn primary" data-act="bkNew"><span>${t('نسخة جديدة', 'New backup')}</span></button><button class="btn" data-act="bkVerifyAll" ${list && list.some(b => b.mine) ? '' : 'disabled'}><span>${t('تحقق من الكل', 'Verify all')}</span></button></div>
@@ -550,7 +551,7 @@ P.logs = () => {
   return head(t('السجل', 'Logs'), t('كل أمر تنفذ وكل نتيجة', 'Every command run and its result'), `<button class="chip" data-act="copyLogs">${t('نسخ', 'Copy')}</button>`, true) + `<main>
     <div class="card"><div class="log">${lines.join('\n') || t('السجل فاضي', 'The log is empty')}</div></div>
     <div class="row2"><button class="btn sm" data-act="logs">${svg('refresh')}<span>${t('تحديث', 'Refresh')}</span></button><button class="btn sm" data-act="saveLogs">${svg('backup')}<span>${M.saveLog()}</span></button></div>
-    <button class="btn sm" data-act="supportArchive">${svg('file')}<span>${M.supportArchive()}</span></button></main>` + nav();
+    <div class="row2"><button class="btn sm" data-act="supportArchive">${svg('file')}<span>${M.supportArchive()}</span></button><button class="btn sm" data-act="supportShare">${svg('tg')}<span>${M.share()}</span></button></div></main>` + nav();
 };
 
 P.about = () => head(t('حول', 'About'), 'Fastboot Studio Mobile', '', true) + `<main>
@@ -657,7 +658,8 @@ S.preflight = sh => {
   const tick = (act, on, label) => `<button class="setrow" data-act="${act}" role="switch" aria-checked="${!!on}"><div class="tx"><b style="font-weight:500;font-size:calc(13px * var(--k))">${label}</b></div><span class="toggle${on ? ' on' : ''}"></span></button>`;
   return sheet(d.blocked ? 'danger' : d.allPass ? 'accent' : 'warn', `<h3>${M.pfTitle()}</h3><div class="note">${M.pfSub()}</div>
     <div class="card" style="padding:6px 12px">${list}</div>
-    ${d.blocked ? `<div class="banner bad" role="alert">${svg('warn')}<div class="body note">${M.pfBlocked()}</div></div>` : d.allPass ? tick('pfSkip', sh.skip, M.pfSkip()) : tick('pfAccept', sh.accept, M.pfAccept())}
+    ${d.blocked ? `<div class="banner bad" role="alert">${svg('warn')}<div class="body note">${M.pfBlocked()}</div></div>` : d.allPass ? '' : tick('pfAccept', sh.accept, M.pfAccept())}
+    ${d.blocked ? '' : `<div class="note">${M.pfOnce()}</div>`}
     ${backup && backup.values[0] !== 'today' && st.phone && st.phone.root ? `<button class="btn sm" data-act="pfBackup">${svg('backup')}<span>${M.pfBackupNow()}</span></button>` : ''}
     <div class="row2"><button class="btn" data-act="sheetClose"><span>${t('إلغاء', 'Cancel')}</span></button><button class="btn primary" data-act="pfGo" ${d.blocked || (!d.allPass && !sh.accept) ? 'disabled' : ''}><span>${M.pfGo()}</span></button></div>`);
 };
@@ -885,7 +887,7 @@ async function gate(kind, then) {
   let d;
   try { d = await call('preflight', { kind }); } catch (e) { fail(e); return; }
   if (!d || !d.needed) { then(); return; }
-  st.sheet = { type: 'preflight', kind, data: d, then, accept: false, skip: false };
+  st.sheet = { type: 'preflight', kind, data: d, then, accept: false };
   render();
 }
 on('restorePlan', d => { if (st.sheet && st.sheet.type === 'restorePlan' && !st.sheet.plan) { st.sheet.progress = d; render(); } });
@@ -1064,23 +1066,31 @@ const actions = {
   },
   bkExport: async el => {
     if (st.exporting) return;
-    st.exporting = el.dataset.v; render();
+    st.exporting = el.dataset.v; st.exportHow = 'save'; render();
     try { const r = await call('backup.export', { name: el.dataset.v }); toast(r && r.saved ? M.exportDone(r.files) : M.exportNone()); }
     catch (e) { fail(e); }
     st.exporting = null; render();
   },
+  bkShare: async el => {
+    if (st.exporting) return;
+    st.exporting = el.dataset.v; st.exportHow = 'share'; render();
+    // The system's share sheet opens once the file is made and its hashes are checked.
+    try { await call('backup.share', { name: el.dataset.v }); }
+    catch (e) { fail(e); }
+    st.exporting = null; render();
+  },
+  supportShare: () => call('logs.share').catch(fail),
   supportArchive: async () => {
     try { const r = await call('logs.export'); toast(r && r.saved ? M.supportDone() : M.logNotSaved()); }
     catch (e) { fail(e); }
   },
   pfAccept: () => { if (st.sheet) { st.sheet.accept = !st.sheet.accept; render(); } },
-  pfSkip: () => { if (st.sheet) { st.sheet.skip = !st.sheet.skip; render(); } },
   pfBackup: () => { st.sheet = null; st.tab = 'backup'; st.page = null; actions.bkNew(); },
   pfGo: async () => {
     const sh = st.sheet;
     if (!sh || sh.type !== 'preflight' || sh.going) return;
     sh.going = true;
-    try { await call('preflight.ack', { kind: sh.kind, accept: sh.accept, skip: sh.skip }); }
+    try { await call('preflight.ack', { kind: sh.kind, accept: sh.accept }); }
     catch (e) { sh.going = false; fail(e); return; }
     st.sheet = null; render();
     sh.then();
