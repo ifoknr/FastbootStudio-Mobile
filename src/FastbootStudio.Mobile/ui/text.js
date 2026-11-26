@@ -42,9 +42,116 @@ const M = {
   targetOtg: (partition, slot, serial) => t(`بينكتب على القسم ${LE(partition)}${M.slotWord(slot)} في الجوال الموصول ${LE(serial)}.`, `This writes partition ${esc(partition)}${M.slotWord(slot)} on the connected phone ${esc(serial)}.`),
   rebootSilent: () => t('انرسل أمر التشغيل. الجوال طفى الاتصال بدون رد، وهذا عادي في بعض البوت لودرات.', 'Restart sent. The phone dropped the link without answering, which is normal for some bootloaders.'),
   sizesUnknown: () => t('هذا البوت لودر ما يعطي حجم الأقسام، فالتطبيق ما يقدر يتأكد إن الملف يكفيه القسم. إذا الملف أكبر، البوت لودر نفسه بيرفضه.', 'This bootloader does not report partition sizes, so the app cannot check that a file fits its partition. If the file is too big, the bootloader itself refuses it.'),
+  // Before the first write of a session
+  pfTitle: () => t('قبل ما نكتب أي شي', 'Before anything is written'),
+  pfSub: () => t('فحص سريع يطلع مرة قبل أول كتابة. ما يغني عن فحص كل ملف، يزيد عليه.', 'A quick list shown before the first write. It adds to the check every file gets; it replaces none of it.'),
+  pfBlocked: () => t('فيه شي يمنع الكتابة الحين. صلّحه وارجع.', 'Something here stops a write for now. Fix it and come back.'),
+  pfAccept: () => t('قريت التنبيهات وأبغى أكمل', 'I have read the warnings and want to go on'),
+  pfSkip: () => t('لا تطلعها مرة ثانية لين أقفل التطبيق', 'Do not show this again until I close the app'),
+  pfBackupNow: () => t('خذ نسخة الحين', 'Back up now'),
+  pfGo: () => t('أكمل', 'Continue'),
+  // Putting a whole backup back
+  restoreAll: () => t('رجّع النسخة كاملة', 'Restore the whole backup'),
+  exportOne: () => t('صدّرها ملف واحد', 'Export as one file'),
+  exporting: () => t('يصدّر النسخة ويتحقق منها…', 'Exporting the backup and checking it…'),
+  exportDone: n => t(`انحفظت النسخة ملف واحد، و${L(n)} صور تطابقت بصماتها بعد الحفظ ✓`, `Saved as one file; ${n} images matched their SHA-256 after saving ✓`),
+  exportNone: () => t('ما انحفظ شي', 'Nothing was saved'),
+  supportArchive: () => t('ملف للدعم', 'Support archive'),
+  supportDone: () => t('انحفظ ملف الدعم (السجل ومعلومات الجهاز، والرقم مخفي)', 'Support archive saved (the log and the device details, serial masked)'),
+  planTitle: () => t('رجّع النسخة كاملة', 'Restore the whole backup'),
+  planChecking: (d) => t(`يفحص الصور وحدة وحدة${d ? ' ' + L(d.n + ' / ' + d.total) + ' · ' + LE(d.file) : '…'}`, `Checking the images one by one${d ? ' ' + esc(d.n + ' / ' + d.total) + ' · ' + esc(d.file) : '…'}`),
+  planTo: (p) => t(`على هذا الجوال ${LE((p.model || '') + ' · ' + (p.serial || ''))}${M.slotWord(p.slot)}`, `To this phone, ${esc((p.model || '') + ' · ' + (p.serial || ''))}${M.slotWord(p.slot)}`),
+  planNote: () => t('كل صورة مرّت بنفس فحص التفليش العادي. الكتابة قسم قسم مع قراءة بعد كل قسم، وتوقف عند أول خطأ.', 'Every image went through the same check as a single flash. They are written one by one, each read back, and it stops at the first failure.'),
+  planBackup: (need, free) => t(`أول شي ينأخذ نسخة من الأقسام اللي بتنكتب${need != null && free != null ? `: تحتاج ${LE(mib(need))} · المتاح ${LE(mib(free))}` : ''}.`, `First, a backup of the partitions about to be overwritten is taken${need != null && free != null ? `: needs ${esc(mib(need))} · ${esc(mib(free))} free` : ''}.`),
+  planNoBackup: () => t('النسخة قبل التفليش مقفلة في الإعدادات: ما راح ينأخذ نسخة من اللي بينكتب عليه.', 'Backup before flashing is off in Settings: no copy is taken of what gets overwritten.'),
+  planSkipped: () => t('ما تنكتب', 'Not written'),
+  planNone: () => t('ما فيه في هالنسخة شي ينكتب من الجوال.', 'Nothing in this backup can be written from the phone.'),
+  planGo: n => t(n === 1 ? 'رجّع قسم واحد' : n === 2 ? 'رجّع قسمين' : `رجّع ${L(n)} أقسام`, `Restore ${n} partition${n === 1 ? '' : 's'}`),
+  planReason: r => ({
+    'other-slot': t('السلوت الثاني: ما ينكتب إلا إذا اخترته', 'The other slot: written only if you tick it'),
+    'verified-boot': t('vbmeta يحدد هل تنقبل باقي الصور. نسخة قديمة منه مع boot معدّل ما تقلع. اختره بس إذا ترجّع كل شي مثل ما كان.', 'vbmeta decides whether the other images are accepted. An older one beside a patched boot will not start. Tick it only when putting everything back as it was.'),
+    'not-allowed': t('التطبيق ما يكتب هذا القسم أبداً (يرجع من برنامج الويندوز)', 'The app never writes this partition (it goes back from the Windows app)'),
+    'no-partition': t('الجوال ما فيه هذا القسم', 'The phone has no such partition'),
+    'not-an-image': t('مو صورة قسم', 'Not a partition image'),
+    'check-failed': t('الفحص رفضها', 'Its check refused it'),
+  })[r] || esc(r || ''),
+  restoreRefused: r => ({
+    'not-recorded': t('هالنسخة ما أخذها التطبيق، فما عنده سجل خاص يثبتها. رجّع منها صورة صورة من "استرجاع"، وكل صورة تنفحص لحالها.', 'The app did not make this backup, so it has no record of its own to vouch for it. Restore from it image by image with "Restore"; each image is checked on its own.'),
+    'other-phone': t('النسخة من جوال ثاني: ما ترجع على هذا الجوال.', 'This backup is from another phone: it does not go back to this one.'),
+    'no-serial': t('ما نقدر نثبت إن النسخة لهذا الجوال (ما فيه رقم تسلسلي).', 'It cannot be proven that this backup is this phone’s (no serial).'),
+    'tampered': t('النسخة تغيّرت بعد ما أخذها التطبيق: SHA256SUMS ما يطابق سجل التطبيق الخاص. ما ترجع.', 'The backup was changed after the app made it: SHA256SUMS no longer matches the app’s own record. It is not restored.'),
+  })[r] || esc(r || ''),
+  confirmRestore: (p, n) => t(`بينكتب ${L(n)} ${n === 1 ? 'قسم' : n === 2 ? 'قسمين' : 'أقسام'} على هذا الجوال ${LE((p.model || '') + ' · ' + (p.serial || ''))}${M.slotWord(p.slot)}.`, `This writes ${n} partition${n === 1 ? '' : 's'} on this phone, ${esc((p.model || '') + ' · ' + (p.serial || ''))}${M.slotWord(p.slot)}.`),
+  restoring: () => t('يرجّع النسخة', 'Restoring the backup'),
+  restoreStep: p => t(`كتابة ${LE(p)} وقراءته`, `Write ${esc(p)} and read it back`),
+  restoreBackupStep: () => t('نسخة من الأقسام اللي بتنكتب', 'Back up the partitions about to be overwritten'),
+  restoredAll: n => t(`رجعت النسخة: ${L(n)} ${n === 1 ? 'قسم' : n === 2 ? 'قسمين' : 'أقسام'}`, `The backup is back: ${n} partition${n === 1 ? '' : 's'}`),
+  restoredNote: () => t('كل قسم انقرا بعد الكتابة وتطابق مع صورته. شغّل الجوال من جديد.', 'Every partition was read back and matched its image. Restart the phone.'),
+  rWritten: () => t('انكتبت وتطابقت', 'Written and verified'),
+  rFailed: () => t('وقف عندها (ممكن تغيّرت)', 'Stopped here (may be changed)'),
+  rNotWritten: () => t('ما انكتبت', 'Not written'),
+  rNone: () => t('ولا شي', 'none'),
+  restoreHow: (touched, backup) => t(
+    (touched ? 'القسم اللي وقف عنده ممكن فيه جزء من الصورة. لا تعيد التشغيل. ' : 'ما انكتب شي على القسم اللي وقف عنده. ') + 'الأقسام اللي انكتبت سليمة وتبقى. تقدر تعيد استرجاع النسخة من صفحة النسخ: يعيد الفحص ويكتب اللي تختاره من جديد.' + (backup ? ' وحالة الجوال قبل الاسترجاع محفوظة في نسخة.' : ''),
+    (touched ? 'The partition it stopped at may hold part of the image. Do not restart. ' : 'Nothing was written to the partition it stopped at. ') + 'The partitions already written are complete and stay. You can run the restore again from the Backups page: it checks again and writes what you choose from the start.' + (backup ? ' The phone as it was before the restore is kept in a backup.' : '')),
+  // Sideload to a recovery (experimental)
+  experimental: () => t('تجريبي', 'Experimental'),
+  sideRow: () => t('جوال في الريكفري (sideload)', 'A phone in recovery (sideload)'),
+  sideTitle: () => t('إرسال ZIP للريكفري', 'Send a zip to recovery'),
+  sideExp: () => t('ميزة تجريبية: انكتبت على وصف بروتوكول adb وانجرّبت على جهاز وهمي، ولسّا ما انجرّبت على كل ريكفري. إذا ما اشتغلت معك، استخدم adb sideload من الكمبيوتر وبلّغنا.', 'Experimental: written from the adb protocol’s description and tried against a stand-in, not yet against every recovery. If it does not work for you, use adb sideload from a computer and tell us.'),
+  sideHow1: () => t('في الجوال الثاني: ادخل الريكفري واختر Apply update from ADB (أو ADB Sideload).', 'On the other phone: open recovery and choose Apply update from ADB (or ADB Sideload).'),
+  sideHow2: () => t('وصّله بكيبل OTG، واختر ملف ZIP من جوالك.', 'Connect it with the OTG cable, and pick the zip from this phone.'),
+  sideHow3: () => t('إذا سألك الجوال الثاني عن السماح لهذا الجهاز، وافق.', 'If the other phone asks whether to allow this device, allow it.'),
+  sideHonest: () => t('التطبيق ما يفحص محتوى هالملف: الريكفري هو اللي يتحقق من توقيعه وهل هو لذاك الجوال، ويثبّته بنفسه. أرسل ملفات من مصدر تثق فيه بس.', 'The app does not inspect this package: the recovery verifies its signature and whether it is for that phone, and installs it itself. Only send packages from a source you trust.'),
+  sidePick: () => t('اختر ملف ZIP', 'Pick the zip'),
+  sideSend: () => t('أرسل للريكفري', 'Send to recovery'),
+  sideBack: () => t('رجوع لقائمة OTG', 'Back to the OTG list'),
+  sideNotZip: () => t('هذا مو ملف ZIP', 'That is not a zip'),
+  sideConfirm: (name, size) => t(`بينرسل ${LE(name)} (${LE(mib(size))}) للريكفري في الجوال الموصول، وهو اللي يثبّته.`, `This sends ${esc(name)} (${esc(mib(size))}) to the recovery on the connected phone, which installs it.`),
+  sideConnect: () => t('الاتصال بالريكفري', 'Connect to the recovery'),
+  sideApprove: () => t('وافق على السماح لهذا الجهاز في الجوال الثاني', 'Allow this device on the other phone'),
+  sideServe: () => t('الريكفري يقرا الملف ويثبّته', 'The recovery reads the package and installs it'),
+  sideRunning: () => t('يرسل للريكفري', 'Sending to recovery'),
+  sideDone: () => t('الريكفري استلم الملف', 'The recovery took the package'),
+  sideDoneNote: () => t('شوف شاشة الجوال الثاني: يكمّل التثبيت بنفسه ويقولك النتيجة، وبعدها شغّله من قائمته.', 'Watch the other phone’s screen: it finishes installing by itself and says how it went; then restart it from its menu.'),
+  sideFailNote: code => ({
+    'sideload-failed': t('الريكفري رفض الملف أو وقف التثبيت (توقيع، أو الملف مو لذاك الجوال). شوف شاشته للسبب.', 'The recovery refused the package or stopped installing (its signature, or it is not for that phone). Its screen says why.'),
+    'not-sideload': t('الجوال الموصول مو في وضع sideload. اختر Apply update from ADB في الريكفري.', 'The connected phone is not in sideload mode. Choose Apply update from ADB in its recovery.'),
+    'sideload-refused': t('هالريكفري ما قبل استلام ملف بهالطريقة.', 'This recovery does not take a package this way.'),
+    'auth-required': t('الجوال الثاني ما سمح لهذا الجهاز. وافق على السؤال اللي يطلع فيه وجرّب مرة ثانية.', 'The other phone did not allow this device. Accept the question it shows and try again.'),
+    'cancelled': t('انلغى الإرسال. الريكفري ما يثبّت ملف ناقص؛ ابدأ sideload فيه من جديد إذا تبغى تعيد.', 'Sending was cancelled. The recovery does not install half a package; start sideload on it again to retry.'),
+  })[code] || t('انقطع الاتصال بالريكفري قبل ما يخلص. الريكفري ما يثبّت ملف ناقص؛ شوف شاشته وابدأ sideload من جديد.', 'The link to the recovery was lost before it finished. The recovery does not install half a package; check its screen and start sideload again.'),
+  otgNote: () => t('قائمة OTG ما تحتاج روت على جوالك. والكتابة تكون على الجوال الموصول برقمه بس. وجوال في الريكفري (Apply update from ADB) يطلع هنا عشان ترسل له ملف ZIP.', 'The OTG menu needs no root on your phone, and writes only to the connected phone, by its serial. A phone in recovery (Apply update from ADB) shows here too, to be sent a zip.'),
+  otgZip: () => t('ملف ZIP يروح للريكفري مو للـ fastboot: دخّل الجوال الثاني الريكفري واختر Apply update from ADB، ويطلع لك في قائمة OTG. هنا فلّش صورة IMG.', 'A zip goes to a recovery, not to fastboot: put the other phone in recovery, choose Apply update from ADB, and it shows in the OTG list. Flash an IMG here.'),
   on: () => t('شغّال', 'On'),
   off: () => t('مقفل', 'Off'),
 };
+
+// [text, small] for one line of the list shown before the first write. v[0] says which case it is.
+function preText(i) {
+  const v = i.values || [];
+  const power = v[3] === 'charging' ? t(' · يشحن', ' · charging') : '';
+  switch (i.code) {
+    case 'battery': return v[0] === 'unknown' ? [t('البطارية غير معروفة', 'Battery level unknown'), t('تأكد إنها تكفي قبل ما تكمل', 'Make sure it is enough before going on')]
+      : v[0] === 'low' ? [t(`البطارية ${L(v[1] + '%')}: أقل من ${L(v[2] + '%')}`, `Battery ${esc(v[1])}%: below the ${esc(v[2])}% minimum`), t('اشحن الجوال قبل أي كتابة', 'Charge the phone before any write') + power]
+      : [t(`البطارية ${L(v[1] + '%')}`, `Battery ${esc(v[1])}%`), t(`الحد الأدنى ${L(v[2] + '%')}`, `The minimum is ${esc(v[2])}%`) + power];
+    case 'root': return v[0] === 'ok' ? [t('صلاحية الروت متاحة', 'Root access granted')] : [t('ما فيه صلاحية روت', 'No root access'), t('وافق على التطبيق في مدير الروت وحدّث صفحة الجهاز', 'Allow the app in your root manager and refresh the Device page')];
+    case 'bootloader': return v[0] === 'unlocked' ? [t('البوت لودر مفتوح', 'Bootloader unlocked')]
+      : v[0] === 'locked' ? [t('البوت لودر مقفل', 'Bootloader locked'), t('الصور المعدّلة ما تقلع على بوت لودر مقفل. الصور الأصلية عادي.', 'Modified images do not start on a locked bootloader. Stock images are fine.')]
+      : [t('حالة البوت لودر غير معروفة', 'Bootloader state unknown'), t('إذا كان مقفل، الصور المعدّلة ما تقلع', 'If it is locked, modified images will not start')];
+    case 'backup': return v[0] === 'today' ? [t('فيه نسخة من اليوم للي بينكتب عليه', 'There is a backup from today of what gets written')]
+      : v[0] === 'automatic' ? [t('نسخة تنأخذ تلقائي قبل الكتابة', 'A backup is taken by itself before the write'), t('ما فيه نسخة من اليوم في سجل التطبيق', 'No backup from today in the app’s record')]
+      : [t('ما فيه نسخة من اليوم، والنسخة التلقائية مقفلة', 'No backup from today, and the automatic one is off'), t('لو صار شي، ما فيه نسخة ترجع لها', 'If something goes wrong there is nothing to go back to')];
+    case 'space': return v[0] === 'unknown' ? [t('المساحة المتاحة غير معروفة', 'Free space unknown'), t('النسخة التلقائية تحتاج مكان', 'The automatic backup needs room')]
+      : v[0] === 'short' ? [t('المساحة ما تكفي للنسخة التلقائية', 'Not enough room for the automatic backup'), M.spaceLine(+v[1], +v[2])]
+      : [t('المساحة تكفي للنسخة التلقائية', 'Room for the automatic backup'), M.spaceLine(+v[1], +v[2])];
+    case 'otg-serial': return v[0] === 'ok' ? [t('الجوال الموصول', 'The connected phone'), LE(v[1])] : [t('الجوال الموصول ما أعطى رقمه', 'The connected phone gave no serial'), t('تأكد إنه الجوال الصحيح على الكيبل', 'Make sure the right phone is on the cable')];
+    case 'otg-bootloader': return v[0] === 'unlocked' ? [t('بوت لودر الجوال الموصول مفتوح', 'The connected phone’s bootloader is unlocked')]
+      : v[0] === 'locked' ? [t('بوت لودر الجوال الموصول مقفل', 'The connected phone’s bootloader is locked'), t('غالباً بيرفض التفليش', 'It will most likely refuse to flash')]
+      : [t('حالة بوت لودر الجوال الموصول غير معروفة', 'The connected phone’s bootloader state is unknown')];
+  }
+  return [esc(i.code), esc(v.join(' · '))];
+}
 
 // [text, small] for one check item. v = values, lv = its level.
 function checkText(item, ctx) {
@@ -144,6 +251,16 @@ function errText(code) {
     'too-big': t('الملف أكبر من القسم', 'The file is bigger than the partition'),
     'backup-failed': t('النسخة الاحتياطية ما نجحت، فما انكتب شي', 'The backup failed, so nothing was written'),
     'no-space': t('المساحة ما تكفي للنسخة الاحتياطية، فما انكتب شي', 'Not enough free space for the backup, so nothing was written'),
+    'preflight-needed': t('لازم تمر على فحص ما قبل الكتابة أول', 'The list before the first write comes first'),
+    'preflight-blocked': t('فحص ما قبل الكتابة فيه شي يمنع', 'Something on the list before the write blocks it'),
+    'nothing-to-restore': t('ما اخترت شي يرجع', 'Nothing was chosen to restore'),
+    'export-failed': t('ما انحفظ الملف سليم، فانحذف', 'The file was not saved whole, so it was removed'),
+    'not-a-zip': t('هذا مو ملف ZIP', 'That is not a zip'),
+    'sideload-failed': t('الريكفري رفض الملف', 'The recovery refused the package'),
+    'sideload-refused': t('الريكفري ما قبل الاستلام', 'The recovery would not take it'),
+    'sideload-lost': t('انقطع الاتصال بالريكفري', 'The link to the recovery was lost'),
+    'not-sideload': t('الجوال الموصول مو في وضع sideload', 'The connected phone is not in sideload mode'),
+    'auth-required': t('الجوال الثاني ما سمح لهذا الجهاز', 'The other phone did not allow this device'),
     'cancelled': t('انلغى الإرسال', 'Sending was cancelled'),
     'backup-unreadable': t('ما قدرنا نقرا النسخة', 'Could not read the backup'),
     'write-failed': t('الكتابة على القسم ما نجحت', 'Writing the partition failed'),

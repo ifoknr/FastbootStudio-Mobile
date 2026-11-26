@@ -66,7 +66,7 @@ const st = {
   phone: null, phoneErr: null, refreshing: false,
   backups: null, bk: {}, bkOpen: null,
   // Backups whose last check was also against the app's own record, and what a new backup takes against what is free.
-  bkRec: {}, space: null,
+  bkRec: {}, space: null, exporting: null,
   // The Companion module, looked for only with root: {installed, version, enabled, usable}.
   comp: null,
   // The update check: {checking, result {installed, latest, newer, page, none}, err, hidden}.
@@ -283,6 +283,13 @@ P.running = () => {
     steps.push([t('تحقق من الملف', 'Check the file'), 'SHA-256', true]);
     steps.push([t(`إرسال ${LE(r.partition)}`, `Send ${esc(r.partition)}`), r.total ? L(`${esc(mib(r.sent))} / ${esc(mib(r.total))}`) : '', r.total > 0 && r.sent >= r.total]);
     steps.push([t('الكتابة (من البوت لودر)', 'Write (by the bootloader)'), '', r.state === 'done']);
+  } else if (r.kind === 'restore') {
+    if (r.backupFirst) steps.push([M.restoreBackupStep(), r.backup ? LE('Backups/…' + r.backup.slice(-16)) : '', has('backup ok')]);
+    (r.partitions || []).forEach(p => steps.push([M.restoreStep(p), '', r.lines.includes('done ' + p)]));
+  } else if (r.kind === 'sideload') {
+    const connected = r.sent > 0 || r.state === 'done';
+    steps.push([M.sideConnect(), !connected && has('approve') ? M.sideApprove() : LE(r.name || ''), connected]);
+    steps.push([M.sideServe(), r.sent > 0 ? L(`${esc(mib(r.sent))} / ${esc(mib(r.total))}`) : '', r.state === 'done']);
   } else if (r.kind === 'backup') {
     const copied = r.lines.filter(l => l.startsWith('backup ') && !l.startsWith('backup ok')).map(l => l.slice(7));
     const plan = r.lines.find(l => l.startsWith('plan '));
@@ -290,6 +297,8 @@ P.running = () => {
     steps.push([t('نسخ الأقسام', 'Copy the partitions') + (plan ? ' ' + L(`${copied.length} / ${esc(plan.slice(5))}`) : ''),
       LE(copied.slice(-6).join(', ')) + (failedParts.length ? `<br><span style="color:var(--warn)">${t('ما انقرت:', 'Could not copy:')} ${LE(failedParts.join(', '))}</span>` : ''), has('backup ok')]);
   }
+  // The cable jobs (a fastboot flash, a sideload) show how far the file has gone, and can be called back while it is on its way.
+  const cable = r.kind === 'otg' || r.kind === 'sideload';
   if (r.state !== 'running') steps = steps.map(s => [s[0], s[1], s[2] || r.state === 'done']);
   steps.push([t('تم', 'Done'), '', r.state === 'done']);
   let marked = false;
@@ -298,30 +307,48 @@ P.running = () => {
     if (done) { b = 'ok'; mark = '✓'; }
     else if (!marked) {
       marked = true;
-      if (r.state === 'running') { b = 'run'; mark = ''; if (r.kind === 'otg' && r.total && r.sent < r.total) side = chip('', L(Math.floor(r.sent * 100 / r.total) + '%')); }
+      if (r.state === 'running') { b = 'run'; mark = ''; if (cable && r.total && r.sent > 0 && r.sent < r.total) side = chip('', L(Math.floor(r.sent * 100 / r.total) + '%')); }
       else if (r.state === 'failed') { b = 'bad'; mark = '✗'; }
     }
     return `<div class="step"><span class="b ${b}">${mark}</span><div>${label}${small ? `<small>${small}</small>` : ''}</div>${side}</div>`;
   }).join('');
   const total = steps.length, done = steps.filter(s => s[2]).length;
-  const title = { image: t('التفليش', 'Flash'), kernel: t('تفليش كيرنل', 'Flash a kernel'), otg: t('إنقاذ OTG', 'OTG rescue'), backup: t('النسخ الاحتياطية', 'Backups') }[r.kind];
-  const sub = r.state === 'running' ? (r.kind === 'backup' ? t('ياخذ نسخة', 'Backing up') : t(`يكتب ${LE(r.partition || 'boot')}`, `Writing ${esc(r.partition || 'boot')}`)) : r.state === 'done' ? t('تم', 'Done') : t('ما كمل', 'Stopped');
-  const pct = r.kind === 'otg' && r.total && r.state === 'running' ? Math.floor(r.sent * 100 / r.total) : Math.round(done * 100 / total);
-  const progress = `<div class="progress${r.state === 'running' && r.kind !== 'otg' ? ' busy' : ''}" style="margin-top:10px"><div style="width:${pct}%"></div></div>`;
+  const title = { image: t('التفليش', 'Flash'), kernel: t('تفليش كيرنل', 'Flash a kernel'), otg: t('إنقاذ OTG', 'OTG rescue'), backup: t('النسخ الاحتياطية', 'Backups'), restore: t('النسخ الاحتياطية', 'Backups'), sideload: M.sideTitle() }[r.kind];
+  const sub = r.state === 'running' ? (r.kind === 'backup' ? t('ياخذ نسخة', 'Backing up') : r.kind === 'restore' ? M.restoring() : r.kind === 'sideload' ? M.sideRunning() : t(`يكتب ${LE(r.partition || 'boot')}`, `Writing ${esc(r.partition || 'boot')}`)) : r.state === 'done' ? t('تم', 'Done') : t('ما كمل', 'Stopped');
+  const pct = cable && r.total && r.state === 'running' ? Math.floor(r.sent * 100 / r.total) : Math.round(done * 100 / total);
+  const progress = `<div class="progress${r.state === 'running' && !(cable && r.sent > 0) ? ' busy' : ''}" style="margin-top:10px"><div style="width:${pct}%"></div></div>`;
   const log = r.kind === 'kernel' && r.lines.length ? `<div class="card"><h2>${t('مخرجات AnyKernel3', 'AnyKernel3 output')}</h2><div class="log">${r.lines.map(esc).join('\n')}</div></div>` : '';
   let body;
   if (r.state === 'running') {
     body = `<div class="card"><h2>${t('الخطوات', 'Steps')} ${chip('ok', L(`${done} / ${total}`))}</h2><div class="steps">${stepHtml}</div>${progress}</div>
-      <div class="banner warn">${svg('warn')}<div class="body"><div class="big" style="font-size:14px">${r.kind === 'otg' ? t('لا تفصل الكيبل ولا تقفل التطبيق', 'Do not unplug the cable or close the app') : t('لا تطفي الجوال ولا تقفل التطبيق', 'Do not turn off the phone or close the app')}</div></div></div>${log}`;
+      <div class="banner warn">${svg('warn')}<div class="body"><div class="big" style="font-size:14px">${cable ? t('لا تفصل الكيبل ولا تقفل التطبيق', 'Do not unplug the cable or close the app') : t('لا تطفي الجوال ولا تقفل التطبيق', 'Do not turn off the phone or close the app')}</div></div></div>${log}`;
     // Only what is still on its way can be called back: the image is in the bootloader's memory until it is told to write.
-    if (r.kind === 'otg' && r.total && r.sent < r.total)
-      body += `<button class="btn" data-act="otgCancel" ${r.cancelling ? 'disabled' : ''}><span>${r.cancelling ? M.cancelling() : M.cancelSend()}</span></button><div class="note">${M.cancelNote()}</div>`;
+    if (cable && r.total && r.sent < r.total)
+      body += `<button class="btn" data-act="otgCancel" ${r.cancelling ? 'disabled' : ''}><span>${r.cancelling ? M.cancelling() : M.cancelSend()}</span></button>${r.kind === 'otg' ? `<div class="note">${M.cancelNote()}</div>` : ''}`;
   } else if (r.state === 'done') body = doneBody(r) + log;
   else body = failBody(r, stepHtml) + log;
   return head(title, sub, r.partition && r.kind !== 'backup' ? chip(r.state === 'failed' ? 'bad' : 'ok', LE(r.partition)) : '') + `<main>${body}</main>` + nav();
 };
 
+// What a restore did, partition by partition: the same three lists whether it finished or stopped.
+function restoreLists(o) {
+  const list = a => a && a.length ? LE(a.join(', ')) : M.rNone();
+  return rows([[M.rWritten(), list(o.written), !(o.written && o.written.length) && A], o.failed ? [M.rFailed(), LE(o.failed)] : null,
+    o.notWritten && o.notWritten.length ? [M.rNotWritten(), list(o.notWritten)] : null]);
+}
+
 function doneBody(r) {
+  if (r.kind === 'restore') {
+    const o = r.outcome || {}, n = (o.written || []).length;
+    return `<div class="card"><div class="big-ok"><div class="c">✓</div><h3>${M.restoredAll(n)}</h3><div class="note">${M.restoredNote()}</div></div>
+      ${restoreLists(o)}${r.backup ? rows([[t('النسخة القديمة', 'Previous copy'), esc('Backups/…' + r.backup.slice(-16))]]) : ''}</div>
+      <button class="btn primary" data-act="reboot" data-v=""><span>${t('إعادة التشغيل الحين', 'Restart now')}</span></button>
+      <button class="btn sm" data-act="runClose"><span>${t('رجوع', 'Back')}</span></button>`;
+  }
+  if (r.kind === 'sideload')
+    return `<div class="card"><div class="big-ok"><div class="c">✓</div><h3>${M.sideDone()}</h3><div class="note">${M.sideDoneNote()}</div></div>
+      ${rows([[t('الملف', 'File'), esc(r.name || '')], [t('الحجم', 'Size'), esc(mib(r.total))]])}</div>
+      <button class="btn primary" data-act="runClose"><span>${t('تم', 'Done')}</span></button>`;
   if (r.kind === 'backup')
     return `<div class="card"><div class="big-ok"><div class="c">✓</div><h3>${t('انحفظت النسخة', 'Backup saved')}</h3><div class="note">${t('كل صورة ومعها بصمتها في SHA256SUMS.', 'Every image with its SHA-256 in SHA256SUMS.')}</div></div>
       ${rows([[t('المجلد', 'Folder'), esc(r.name || '')]])}</div><button class="btn primary" data-act="runClose"><span>${t('تم', 'Done')}</span></button>`;
@@ -350,6 +377,18 @@ function doneBody(r) {
 }
 
 function failBody(r, stepHtml) {
+  if (r.kind === 'restore') {
+    const o = r.outcome || {};
+    return `<div class="banner bad" role="alert">${svg('warn')}<div class="body"><div class="big">${errText(r.error)}</div><div class="note">${M.restoreHow(!!o.failed, !!r.backup)}</div></div></div>
+      <div class="card">${restoreLists(o)}</div>
+      <div class="card"><div class="steps">${stepHtml}</div></div>
+      ${r.backup ? `<button class="btn primary" data-act="restoreFrom" data-v="${esc(r.backup)}"${o.failed ? ` data-file="${esc(o.failed)}.img"` : ''}>${svg('restore')}<span>${t('رجّع النسخة القديمة', 'Put the previous copy back')}</span></button>` : ''}
+      <button class="btn" data-act="runClose"><span>${t('رجوع', 'Back')}</span></button>`;
+  }
+  if (r.kind === 'sideload')
+    return `<div class="banner bad" role="alert">${svg('warn')}<div class="body"><div class="big">${errText(String(r.error || '').split(':')[0])}</div><div class="note">${M.sideFailNote(String(r.error || '').split(':')[0])}</div></div></div>
+      <div class="card"><div class="steps">${stepHtml}</div></div>
+      <button class="btn" data-act="runClose"><span>${t('رجوع', 'Back')}</span></button>`;
   // The partition may hold part of the new image: a write that started, or a kernel installer that changed it before failing.
   const written = r.outcome && (r.outcome.written || r.outcome.touched || (r.kind === 'kernel' && r.outcome.changed));
   const code = String(r.error || '').split(':')[0];
@@ -390,7 +429,9 @@ P.backup = () => {
       ${rows(open.files.map(f => [LE(f.name.replace(/\.img$/, '')), esc(short(f.sha256)) + (failed.includes(f.name) ? ' ✗' : s === 'ok' ? ' ✓' : '')]))}
       ${s === 'ok' && st.bkRec[open.name] ? `<div class="note" style="margin-top:8px">${M.recordedOk()}</div>` : ''}
       ${open.mine ? '' : `<div class="note" style="margin-top:8px">${t(`النسخة لـ ${LE(open.model || '?')} · ${LE(open.serial || '?')}: تنفلش على جوالها بس (من OTG أو الكمبيوتر).`, `This backup is ${esc(open.model || '?')} · ${esc(open.serial || '?')}’s: it can only go back to that phone (OTG or a computer).`)}</div>`}
-      <div class="${open.mine ? 'row3' : 'row2'}" style="margin-top:10px">${open.mine ? `<button class="btn sm" data-act="bkVerify" data-v="${esc(open.name)}"><span>${t('تحقق', 'Verify')}</span></button><button class="btn sm" data-act="bkRestore" data-v="${esc(open.name)}"><span>${t('استرجاع', 'Restore')}</span></button>` : ''}<button class="btn sm danger" data-act="bkDelete" data-v="${esc(open.name)}"><span>${t('حذف', 'Delete')}</span></button></div></div>`;
+      <div class="${open.mine ? 'row3' : 'row2'}" style="margin-top:10px">${open.mine ? `<button class="btn sm" data-act="bkVerify" data-v="${esc(open.name)}"><span>${t('تحقق', 'Verify')}</span></button><button class="btn sm" data-act="bkRestore" data-v="${esc(open.name)}"><span>${t('استرجاع', 'Restore')}</span></button>` : ''}<button class="btn sm danger" data-act="bkDelete" data-v="${esc(open.name)}"><span>${t('حذف', 'Delete')}</span></button></div>
+      <div class="${open.mine ? 'row2' : ''}" style="margin-top:8px">${open.mine ? `<button class="btn sm" data-act="bkRestoreAll" data-v="${esc(open.name)}">${svg('restore')}<span>${M.restoreAll()}</span></button>` : ''}<button class="btn sm" data-act="bkExport" data-v="${esc(open.name)}" ${st.exporting ? 'disabled' : ''}>${st.exporting === open.name ? '<span class="spin" style="margin-inline-end:8px"></span>' : svg('backup')}<span>${M.exportOne()}</span></button></div>
+      ${st.exporting === open.name ? `<div class="note" style="margin-top:6px">${M.exporting()}</div>` : ''}</div>`;
   }
   return top + `<main>
     <div class="row2"><button class="btn primary" data-act="bkNew"><span>${t('نسخة جديدة', 'New backup')}</span></button><button class="btn" data-act="bkVerifyAll" ${list && list.some(b => b.mine) ? '' : 'disabled'}><span>${t('تحقق من الكل', 'Verify all')}</span></button></div>
@@ -403,8 +444,11 @@ P.otg = () => {
   const o = st.o, p = o.phone;
   const top = head(t('إنقاذ OTG', 'OTG rescue'), t('فلّش جوال ثاني موصول بكيبل OTG', 'Flash another phone over an OTG cable'),
     p ? chip('ok', 'USB') : o.devices.length ? chip('info', t('موصول', 'Plugged in')) : chip('', t('ما فيه جهاز', 'No device')));
+  if (!p && o.side) return top + sidePage(o.side) + nav();
   if (!p) {
-    const devs = o.devices.length ? `<div class="card list">${o.devices.map(d => `<button class="it" data-act="otgConnect" data-v="${esc(d.id)}"><div class="ic">${svg('otg')}</div><div><b>${esc(d.name || t('جوال في وضع fastboot', 'A phone in fastboot'))}</b><small class="ltr">${esc([d.maker, d.vid + ':' + d.pid].filter(Boolean).join(' · '))}</small></div>${o.connecting === d.id ? '<span class="spin"></span>' : chip('ok', t('اتصل', 'Connect'))}</button>`).join('')}</div>
+    const devs = o.devices.length ? `<div class="card list">${o.devices.map(d => d.mode === 'adb'
+      ? `<button class="it" data-act="sideOpen" data-v="${esc(d.id)}" data-name="${esc(d.name || '')}"><div class="ic">${svg('zip')}</div><div><b>${M.sideRow()}</b><small class="ltr">${esc([d.name, d.maker, d.vid + ':' + d.pid].filter(Boolean).join(' · '))}</small></div>${chip('warn', M.experimental())}</button>`
+      : `<button class="it" data-act="otgConnect" data-v="${esc(d.id)}"><div class="ic">${svg('otg')}</div><div><b>${esc(d.name || t('جوال في وضع fastboot', 'A phone in fastboot'))}</b><small class="ltr">${esc([d.maker, d.vid + ':' + d.pid].filter(Boolean).join(' · '))}</small></div>${o.connecting === d.id ? '<span class="spin"></span>' : chip('ok', t('اتصل', 'Connect'))}</button>`).join('')}</div>
       ${o.connecting ? `<div class="note">${t('وافق على طلب صلاحية USB اللي يطلع لك.', 'Allow the USB permission request.')}</div>` : ''}`
       : `<div class="card"><div class="empty"><div class="c">${svg('otg')}</div><h3>${t('وصّل الجوال الثاني', 'Connect the other phone')}</h3><div class="note">${t('التطبيق ينتظر جوال في وضع fastboot.', 'Waiting for a phone in fastboot.')}</div></div></div>`;
     return top + `<main>${o.err ? errBanner(o.err) : ''}${devs}
@@ -412,7 +456,7 @@ P.otg = () => {
         <li>${t('طفّ الجوال الثاني، وشغّله على fastboot (غالباً: زر الصوت تحت + التشغيل).', 'Turn the other phone off and start it in fastboot (usually volume down + power).')}</li>
         <li>${t('وصّل كيبل OTG بجوالك، وكيبل USB بالجوال الثاني.', 'Plug the OTG adapter into your phone and the USB cable into the other phone.')}</li>
         <li>${t('وافق على طلب الصلاحية اللي يطلع لك.', 'Allow the USB permission request.')}</li></ol></div>
-      <div class="banner info">${svg('info')}<div class="body note">${t('قائمة OTG ما تحتاج روت على جوالك. والكتابة تكون على الجوال الموصول برقمه بس. تفليش ZIP من الريكفري (sideload) بيجي بعدين.', 'The OTG menu needs no root on your phone, and writes only to the connected phone, by its serial. Sideloading a zip in recovery comes later.')}</div></div>
+      <div class="banner info">${svg('info')}<div class="body note">${M.otgNote()}</div></div>
     </main>` + nav();
   }
   const slot = p.slot ? (o.other ? (p.slot === '_a' ? '_b' : '_a') : p.slot) : '';
@@ -445,6 +489,20 @@ P.otg = () => {
     <div class="note">${t('يكتب على هذا الجوال الموصول برقمه بس، وما يلمس أي جهاز ثاني.', 'Writes to this connected phone by its serial only, never to another device.')}</div>
   </main>` + nav();
 };
+
+// A phone in recovery, waiting for a sideload: pick the zip and send it. Marked experimental on the page itself.
+function sidePage(s) {
+  return `<main>
+    <div class="card"><div class="usb"><div class="ph">${svg('zip')}</div><div style="flex:1;min-width:0"><div style="font-weight:600">${M.sideRow()}</div><div class="note">${LE(s.name || 'adb')}</div></div>${chip('warn', M.experimental())}</div></div>
+    <div class="banner warn">${svg('warn')}<div class="body note">${M.sideExp()}</div></div>
+    <div class="card"><h2>${t('الطريقة', 'How to')}</h2><ol class="how"><li>${M.sideHow1()}</li><li>${M.sideHow2()}</li><li>${M.sideHow3()}</li></ol></div>
+    <div><div class="label">${t('الملف', 'The file')}</div>
+      ${s.file ? fileCard('zip', s.file.name, t(`${LE(mib(s.file.size))} · ملف ZIP`, `${esc(mib(s.file.size))} · a zip`), chip('', t('تغيير', 'Change')), 'sidePick') : `<button class="btn sm" data-act="sidePick">${svg('zip')}<span>${M.sidePick()}</span></button>`}</div>
+    <div class="banner info">${svg('info')}<div class="body note">${M.sideHonest()}</div></div>
+    <button class="btn primary" data-act="sideSend" ${s.file ? '' : 'disabled'}><span>${M.sideSend()}</span></button>
+    <button class="btn sm" data-act="sideClose"><span>${M.sideBack()}</span></button>
+  </main>`;
+}
 
 P.more = () => {
   if (st.page) return P[st.page]();
@@ -491,7 +549,8 @@ P.logs = () => {
   const lines = st.logs.map(l => { const m = /^(\d\d:\d\d:\d\d) (.*)$/.exec(l); return m ? `<span class="t">${m[1]}</span> <span class="${cls(m[2])}">${esc(m[2])}</span>` : esc(l); });
   return head(t('السجل', 'Logs'), t('كل أمر تنفذ وكل نتيجة', 'Every command run and its result'), `<button class="chip" data-act="copyLogs">${t('نسخ', 'Copy')}</button>`, true) + `<main>
     <div class="card"><div class="log">${lines.join('\n') || t('السجل فاضي', 'The log is empty')}</div></div>
-    <div class="row2"><button class="btn sm" data-act="logs">${svg('refresh')}<span>${t('تحديث', 'Refresh')}</span></button><button class="btn sm" data-act="saveLogs">${svg('backup')}<span>${M.saveLog()}</span></button></div></main>` + nav();
+    <div class="row2"><button class="btn sm" data-act="logs">${svg('refresh')}<span>${t('تحديث', 'Refresh')}</span></button><button class="btn sm" data-act="saveLogs">${svg('backup')}<span>${M.saveLog()}</span></button></div>
+    <button class="btn sm" data-act="supportArchive">${svg('file')}<span>${M.supportArchive()}</span></button></main>` + nav();
 };
 
 P.about = () => head(t('حول', 'About'), 'Fastboot Studio Mobile', '', true) + `<main>
@@ -589,6 +648,51 @@ S.newBackup = () => {
     <div class="note">${t('النسخة الكاملة فيها super، فتاخذ عدة جيجا. الإضافة تتأكد من المساحة قبل ما تبدأ.', 'The full backup includes super, so it takes several GB; the module checks the free space first.')}</div>` : ''}
     <button class="btn sm" data-act="sheetClose"><span>${t('إلغاء', 'Cancel')}</span></button>`);
 };
+
+// The list before the first write of a session: what passes, what needs a tick, what stops it.
+S.preflight = sh => {
+  const d = sh.data, mark = { pass: ['ok', '✓'], warn: ['warn', '!'], fail: ['bad', '✗'] };
+  const list = d.items.map(i => { const [k, m] = mark[i.level] || mark.fail; const [text, small] = preText(i); return vrow(k, m, i.level === 'fail' ? `<b class="bad">${text}</b>` : text, small); }).join('');
+  const backup = d.items.find(i => i.code === 'backup');
+  const tick = (act, on, label) => `<button class="setrow" data-act="${act}" role="switch" aria-checked="${!!on}"><div class="tx"><b style="font-weight:500;font-size:calc(13px * var(--k))">${label}</b></div><span class="toggle${on ? ' on' : ''}"></span></button>`;
+  return sheet(d.blocked ? 'danger' : d.allPass ? 'accent' : 'warn', `<h3>${M.pfTitle()}</h3><div class="note">${M.pfSub()}</div>
+    <div class="card" style="padding:6px 12px">${list}</div>
+    ${d.blocked ? `<div class="banner bad" role="alert">${svg('warn')}<div class="body note">${M.pfBlocked()}</div></div>` : d.allPass ? tick('pfSkip', sh.skip, M.pfSkip()) : tick('pfAccept', sh.accept, M.pfAccept())}
+    ${backup && backup.values[0] !== 'today' && st.phone && st.phone.root ? `<button class="btn sm" data-act="pfBackup">${svg('backup')}<span>${M.pfBackupNow()}</span></button>` : ''}
+    <div class="row2"><button class="btn" data-act="sheetClose"><span>${t('إلغاء', 'Cancel')}</span></button><button class="btn primary" data-act="pfGo" ${d.blocked || (!d.allPass && !sh.accept) ? 'disabled' : ''}><span>${M.pfGo()}</span></button></div>`);
+};
+
+// A whole backup back: the plan (what is written where, what is left and why), then one confirmation.
+S.restorePlan = sh => {
+  const p = sh.plan;
+  if (sh.err) return sheet('danger', `<h3>${M.planTitle()}</h3>${errBanner(sh.err)}<button class="btn" data-act="sheetClose"><span>${t('رجوع', 'Back')}</span></button>`);
+  if (!p) return sheet('line', `<h3>${M.planTitle()}</h3>${spinner(M.planChecking(sh.progress))}<button class="btn" data-act="sheetClose"><span>${t('إلغاء', 'Cancel')}</span></button>`);
+  if (p.refused) return sheet('danger', `<h3>${M.planTitle()}</h3><div class="note ltr">${esc(p.name)}</div>
+    <div class="banner bad" role="alert">${svg('lock')}<div class="body note">${M.restoreRefused(p.refused)}</div></div><button class="btn" data-act="sheetClose"><span>${t('رجوع', 'Back')}</span></button>`);
+  const can = p.items.filter(i => i.state !== 'skipped'), skipped = p.items.filter(i => i.state === 'skipped');
+  const chosen = can.filter(i => sh.sel[i.file]);
+  const need = chosen.reduce((n, i) => n + (i.bytes || 0), 0), short = p.backupFirst && p.free != null && chosen.length && need + 1048576 > p.free;
+  const row = i => `<button class="setrow" data-act="planTick" data-v="${esc(i.file)}" role="switch" aria-checked="${!!sh.sel[i.file]}"><div class="tx"><b class="ltr" style="font-family:'Roboto Mono',monospace;font-weight:500;font-size:calc(13px * var(--k))">${esc(i.partition)}</b>
+    <small>${LE(mib(i.bytes))}${i.check && i.check.verdict === 'notice' ? ' · ' + t('مع تنبيه', 'with a notice') : ''}${i.reason ? '<br>' + M.planReason(i.reason) : ''}</small></div><span class="toggle${sh.sel[i.file] ? ' on' : ''}"></span></button>`;
+  return sheet(can.length ? 'accent' : 'warn', `<h3>${M.planTitle()}</h3><div class="note" style="color:var(--text)">${M.planTo(p)}</div><div class="note">${M.planNote()}</div>
+    ${can.length ? `<div class="card" style="padding:4px 12px">${can.map(row).join('')}</div>` : `<div class="banner warn">${svg('warn')}<div class="body note">${M.planNone()}</div></div>`}
+    ${skipped.length ? `<div class="card" style="padding:8px 12px"><h2 style="margin-bottom:4px">${M.planSkipped()}</h2>${skipped.map(i => vrow('plain', '–', LE(i.partition || i.file), M.planReason(i.reason))).join('')}</div>` : ''}
+    <div class="note">${p.backupFirst ? M.planBackup(chosen.length ? need : null, p.free) : M.planNoBackup()}</div>
+    ${short ? `<div class="banner warn" role="alert">${svg('warn')}<div class="body note">${M.spaceShort()}</div></div>` : ''}
+    <div class="row2"><button class="btn" data-act="sheetClose"><span>${t('إلغاء', 'Cancel')}</span></button><button class="btn primary" data-act="planGo" ${chosen.length && !short ? '' : 'disabled'}><span>${M.planGo(chosen.length)}</span></button></div>`);
+};
+
+S.restoreConfirm = sh => {
+  const p = sh.plan, chosen = p.items.filter(i => i.state !== 'skipped' && sh.sel[i.file]);
+  return sheet('warn', `<div class="banner warn">${svg('warn')}<div class="body"><div class="big">${M.planTitle()}</div><div class="note">${M.confirmRestore(p, chosen.length)}</div></div></div>
+    <div class="card" style="padding:8px 12px">${rows(chosen.map(i => [LE(i.partition), esc(mib(i.bytes))]))}</div>
+    <div class="note">${p.backupFirst ? M.planBackup(null, null) : M.planNoBackup()}</div>
+    <div class="row2"><button class="btn" data-act="sheetClose"><span>${t('إلغاء', 'Cancel')}</span></button><button class="btn warnb" data-act="doRestore"><span>${M.planGo(chosen.length)}</span></button></div>`);
+};
+
+S.sideConfirm = sh => sheet('warn', `<div class="banner warn">${svg('warn')}<div class="body"><div class="big">${M.sideTitle()} ${chip('warn', M.experimental())}</div><div class="note">${M.sideConfirm(sh.file.name, sh.file.size)}</div></div></div>
+  <div class="note">${M.sideHonest()}</div>
+  <div class="row2"><button class="btn" data-act="sheetClose"><span>${t('إلغاء', 'Cancel')}</span></button><button class="btn primary" data-act="doSide"><span>${M.sideSend()}</span></button></div>`);
 
 S.deleteBackup = sh => sheet('danger', `<h3>${t('حذف النسخة؟', 'Delete the backup?')}</h3><div class="note ltr">${esc(sh.name)}</div>
   <div class="note" style="color:var(--text)">${t('الحذف نهائي. إذا هذي آخر نسخة لجوالك، خذ نسخة جديدة قبل أي تفليش.', 'This cannot be undone. If it is your phone’s last backup, take a new one before flashing.')}</div>
@@ -776,6 +880,16 @@ on('runEnd', d => {
   if (st.phone && st.phone.root) loadBackups();
 });
 
+// Before a write: the list shown before the first write of a session (the app decides whether it is due), then what was asked for.
+async function gate(kind, then) {
+  let d;
+  try { d = await call('preflight', { kind }); } catch (e) { fail(e); return; }
+  if (!d || !d.needed) { then(); return; }
+  st.sheet = { type: 'preflight', kind, data: d, then, accept: false, skip: false };
+  render();
+}
+on('restorePlan', d => { if (st.sheet && st.sheet.type === 'restorePlan' && !st.sheet.plan) { st.sheet.progress = d; render(); } });
+
 // One flash at a time; steps arrive through fbsEvent('progress').
 async function startRun(run, method, args, after) {
   st.sheet = null;
@@ -799,12 +913,13 @@ on('progress', d => {
   if (m) st.run.backup = m[1].split('/').pop();
   render();
 });
-on('otgProgress', d => { if (st.run && st.run.kind === 'otg') { st.run.sent = d.sent; st.run.total = d.total; render(); } });
+on('otgProgress', d => { if (st.run && (st.run.kind === 'otg' || st.run.kind === 'sideload')) { st.run.sent = d.sent; st.run.total = d.total; render(); } });
 on('otg', () => { if (st.tab === 'otg') scanOtg(); });
 on('system', d => { st.systemDark = !!d.dark; applyLook(); render(); });
 
 async function scanOtg() {
   try { st.o.devices = await call('otg.scan'); } catch (e) { st.o.devices = []; }
+  if (st.o.side && !st.run && !st.o.devices.some(d => d.id === st.o.side.id)) st.o.side = null;
   if (st.o.phone && !st.o.devices.some(d => d.open)) {
     st.o.phone = null; st.o.check = null; st.o.err = 'usb-gone';
   }
@@ -856,7 +971,7 @@ const actions = {
   flash: () => {
     const c = st.f.check;
     if (!c || !c.check.canFlash) return;
-    st.sheet = { type: 'confirm', ctx: 'image', check: c }; render();
+    gate('image', () => { st.sheet = { type: 'confirm', ctx: 'image', check: c }; render(); });
   },
   doFlash: el => {
     const c = st.f.check, args = Object.assign({ checkId: c.checkId }, consent(el));
@@ -871,7 +986,7 @@ const actions = {
   flashKernel: () => {
     const c = st.k.check;
     if (!c || !c.check.canFlash) return;
-    st.sheet = { type: 'confirm', ctx: 'kernel', check: c }; render();
+    gate('kernel', () => { st.sheet = { type: 'confirm', ctx: 'kernel', check: c }; render(); });
   },
   doKernel: el => {
     const c = st.k.check;
@@ -884,6 +999,8 @@ const actions = {
     if (r && r.kind === 'image') checkImage();
     if (r && r.kind === 'kernel' && st.k) checkKernel();
     if (r && r.kind === 'otg') { checkOtg(); scanOtg(); }
+    if (r && r.kind === 'sideload') { st.o.side = null; scanOtg(); }
+    if (r && r.kind === 'restore') loadBackups();
     render();
   },
   restoreFrom: el => {
@@ -922,6 +1039,70 @@ const actions = {
   },
   bkRestore: el => { st.sheet = { type: 'restore', name: el.dataset.v }; render(); },
   bkDelete: el => { st.sheet = { type: 'deleteBackup', name: el.dataset.v }; render(); },
+  bkRestoreAll: async el => {
+    const sh = st.sheet = { type: 'restorePlan', name: el.dataset.v, plan: null, sel: {} };
+    render();
+    try {
+      const p = await call('restore.plan', { name: sh.name });
+      // What the plan includes starts ticked; what it only offers (the other slot, vbmeta) starts unticked.
+      (p.items || []).forEach(i => { if (i.state === 'include') sh.sel[i.file] = true; });
+      sh.plan = p;
+    } catch (e) { sh.err = e.message; }
+    if (st.sheet === sh) render();
+  },
+  planTick: el => { const sh = st.sheet; if (sh && sh.sel) { sh.sel[el.dataset.v] = !sh.sel[el.dataset.v]; render(); } },
+  planGo: () => {
+    const sh = st.sheet;
+    if (!sh || !sh.plan) return;
+    gate('restore', () => { st.sheet = { type: 'restoreConfirm', plan: sh.plan, sel: sh.sel }; render(); });
+  },
+  doRestore: () => {
+    const sh = st.sheet, p = sh.plan, chosen = p.items.filter(i => i.state !== 'skipped' && sh.sel[i.file]);
+    st.tab = 'backup'; st.page = null;
+    startRun({ kind: 'restore', where: 'backup', name: p.name, serial: p.serial, slot: p.slot, partitions: chosen.map(i => i.partition) },
+      'restore.run', { planId: p.planId, files: chosen.map(i => i.file) }, () => loadBackups());
+  },
+  bkExport: async el => {
+    if (st.exporting) return;
+    st.exporting = el.dataset.v; render();
+    try { const r = await call('backup.export', { name: el.dataset.v }); toast(r && r.saved ? M.exportDone(r.files) : M.exportNone()); }
+    catch (e) { fail(e); }
+    st.exporting = null; render();
+  },
+  supportArchive: async () => {
+    try { const r = await call('logs.export'); toast(r && r.saved ? M.supportDone() : M.logNotSaved()); }
+    catch (e) { fail(e); }
+  },
+  pfAccept: () => { if (st.sheet) { st.sheet.accept = !st.sheet.accept; render(); } },
+  pfSkip: () => { if (st.sheet) { st.sheet.skip = !st.sheet.skip; render(); } },
+  pfBackup: () => { st.sheet = null; st.tab = 'backup'; st.page = null; actions.bkNew(); },
+  pfGo: async () => {
+    const sh = st.sheet;
+    if (!sh || sh.type !== 'preflight' || sh.going) return;
+    sh.going = true;
+    try { await call('preflight.ack', { kind: sh.kind, accept: sh.accept, skip: sh.skip }); }
+    catch (e) { sh.going = false; fail(e); return; }
+    st.sheet = null; render();
+    sh.then();
+  },
+  sideOpen: el => { st.o.side = { id: el.dataset.v, name: el.dataset.name, file: null }; st.o.err = null; render(); },
+  sideClose: () => { st.o.side = null; render(); scanOtg(); },
+  sidePick: async () => {
+    let r;
+    try { r = await call('pick'); } catch (e) { fail(e); return; }
+    if (!r || !st.o.side) return;
+    if (!r.zip) { toast(M.sideNotZip()); return; }
+    st.o.side.file = r; render();
+  },
+  sideSend: () => {
+    const s = st.o.side;
+    if (!s || !s.file) return;
+    gate('sideload', () => { st.sheet = { type: 'sideConfirm', file: s.file }; render(); });
+  },
+  doSide: () => {
+    const s = st.o.side;
+    startRun({ kind: 'sideload', where: 'otg', name: s.file.name, sent: 0, total: s.file.size }, 'sideload.run', { id: s.id, token: s.file.token });
+  },
   doDelete: async el => {
     st.sheet = null;
     try { await call('backup.delete', { name: el.dataset.v }); toast(t('انحذفت النسخة', 'Backup deleted')); }
@@ -949,7 +1130,7 @@ const actions = {
     let r;
     try { r = await call('pick'); } catch (e) { fail(e); return; }
     if (!r) return;
-    if (r.zip) { st.sheet = { type: 'message', kind: 'info', color: 'notice', html: t('تفليش ZIP على جوال ثاني يحتاج الريكفري (sideload)، وهذا بيجي بعدين. فلّش صورة IMG هنا.', 'Flashing a zip on another phone needs recovery sideload, which comes later. Flash an IMG here.') }; render(); return; }
+    if (r.zip) { st.sheet = { type: 'message', kind: 'info', color: 'notice', html: M.otgZip() }; render(); return; }
     st.o.folder = null; st.o.src = { type: 'file', token: r.token, name: r.name, size: r.size }; st.o.expected = '';
     const guess = ALLOWED.slice().sort((a, b) => b.length - a.length).find(b => r.name.toLowerCase().includes(b));
     if (guess && (st.o.phone.targets || []).includes(guess) && !st.o.base) st.o.base = guess;
@@ -967,7 +1148,7 @@ const actions = {
   otgFlash: () => {
     const c = st.o.check;
     if (!c || !c.check.canFlash || c.tooBigForDownload) return;
-    st.sheet = { type: 'confirm', ctx: 'otg', check: c }; render();
+    gate('otg', () => { st.sheet = { type: 'confirm', ctx: 'otg', check: c }; render(); });
   },
   doOtg: el => {
     const c = st.o.check;
@@ -975,7 +1156,7 @@ const actions = {
   },
   otgCancel: async () => {
     const r = st.run;
-    if (!r || r.kind !== 'otg' || r.state !== 'running' || r.cancelling) return;
+    if (!r || (r.kind !== 'otg' && r.kind !== 'sideload') || r.state !== 'running' || r.cancelling) return;
     r.cancelling = true; render();
     try {
       const x = await call('otg.cancel');

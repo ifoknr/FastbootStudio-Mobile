@@ -2,6 +2,9 @@
 // A pretend phone for previews and screenshots in a desktop browser. Not packed into the app.
 // ?lang=ar|en&theme=dark|light&root=0&dev=1&otg=1
 // &sizes=0: an OTG bootloader that gives no partition sizes; &silent=1: one that restarts without answering.
+// &pf=pass|warn|fail: the list before the first write; &refuse=1: a backup the whole-restore refuses; &rfail=1: a restore that stops
+// at its second partition; &otg=side: a phone in recovery sideload on the cable; &sfail=1: a recovery that refuses the package.
+// &ffail=1: a flash whose read-back does not match.
 // &resume=1: the page comes back to a flash already running; &space=low: no room for a backup; &slow=1: a slow OTG send, to cancel.
 
 (function () {
@@ -27,7 +30,7 @@
   let pickIndex = 0;
   const logs = [];
   const log = l => logs.push(new Date().toTimeString().slice(0, 8) + ' ' + l);
-  let pending = null, otgPhone = null, otgStop = false;
+  let pending = null, otgPhone = null, otgStop = false, preflightSkip = false, restorePlan = null;
   const otgDevice = { id: '/dev/bus/usb/001/002', name: 'Android', maker: 'Xiaomi', vid: '18d1', pid: 'd00d', permitted: false, open: false };
 
   const item = (level, code, values, override) => ({ level, original: override && level === 'warn' ? 'block' : level, override: !!override, code, values: values || [] });
@@ -67,7 +70,7 @@
     'settings.set': a => { if (a.key in settings) settings[a.key] = a.value; return Object.assign({}, settings); },
     'ui.bars': () => null,
     'device.refresh': () => phone,
-    'pick': () => { const name = picks[pickIndex++ % picks.length]; return { token: 't' + pickIndex, name, size: name.endsWith('.zip') ? 32925696 : 8388608, zip: name.endsWith('.zip') }; },
+    'pick': () => { const name = picks[pickIndex++ % picks.length]; return { token: 't' + pickIndex, name, size: /^lineage|ota/i.test(name) ? 1288490188 : name.endsWith('.zip') ? 32925696 : 8388608, zip: name.endsWith('.zip') }; },
     'pickFolder': () => ({ token: 'f1', name: 'Redmi_Note_12_9f8e7d6c_20260830-120501', serial: '9f8e7d6c', model: 'Redmi Note 12', date: '2026-08-30', hasSums: true,
       files: [{ name: 'boot_a.img', partition: 'boot_a', listed: true }, { name: 'vendor_boot_a.img', partition: 'vendor_boot_a', listed: true }] }),
     'flash.check': a => {
@@ -85,6 +88,10 @@
       await ev('backup ok /sdcard/FastbootStudio/Backups/23078PND5G_a1b2c3d4_20261018-101544', 900);
       await ev('write ' + p.partition + ' 8388608 bytes', 300);
       if (q.get('hold') === 'write') await new Promise(() => {});
+      if (q.get('ffail') === '1') {
+        await ev('written ' + p.partition, 300); await ev('verify ' + p.partition, 100); await ev('error: verify-failed: no hash', 300);
+        return { partition: p.partition, written: true, touched: true, verified: false, error: 'verify-failed: no hash', backup: '23078PND5G_a1b2c3d4_20261018-101544', sha256: p.check.sha256 };
+      }
       await ev('written ' + p.partition, 600);
       await ev('verify ' + p.partition, 100);
       await ev('verify ok ' + p.check.sha256, 1200);
@@ -151,7 +158,69 @@
     'run.clear': () => null,
     'copy': () => null,
     'open': () => null,
-    'otg.scan': () => q.get('otg') === '1' ? [Object.assign({}, otgDevice, { open: !!otgPhone })] : [],
+    'otg.scan': () => q.get('otg') === '1' ? [Object.assign({ mode: 'fastboot' }, otgDevice, { open: !!otgPhone })]
+      : q.get('otg') === 'side' ? [{ mode: 'adb', id: '/dev/bus/usb/001/003', name: 'Redmi Note 12', maker: 'Xiaomi', vid: '18d1', pid: 'd001', permitted: true, open: false }] : [],
+    'preflight': a => {
+      const pf = q.get('pf');
+      if (!pf || preflightSkip) return { needed: false };
+      const otg = a.kind === 'otg' || a.kind === 'sideload';
+      const items = [{ code: 'battery', level: pf === 'fail' ? 'fail' : 'pass', values: pf === 'fail' ? ['low', '31', '50', 'on-battery'] : ['ok', '82', '50', 'charging'] }].concat(otg
+        ? [{ code: 'otg-serial', level: a.kind === 'sideload' ? 'warn' : 'pass', values: a.kind === 'sideload' ? ['none'] : ['ok', '9f8e7d6c'] }].concat(a.kind === 'otg' ? [{ code: 'otg-bootloader', level: pf === 'pass' ? 'pass' : 'warn', values: [pf === 'pass' ? 'unlocked' : 'locked'] }] : [])
+        : [{ code: 'root', level: 'pass', values: ['ok'] }, { code: 'bootloader', level: pf === 'pass' ? 'pass' : 'warn', values: [pf === 'pass' ? 'unlocked' : 'unknown'] },
+          { code: 'backup', level: 'pass', values: [pf === 'pass' ? 'today' : 'automatic'] }, { code: 'space', level: 'pass', values: ['ok', '8388608', '48318382080'] }]);
+      return { needed: true, blocked: items.some(i => i.level === 'fail'), allPass: items.every(i => i.level === 'pass'), items };
+    },
+    'preflight.ack': a => { if (a.skip) preflightSkip = true; return null; },
+    'restore.plan': async a => {
+      const b = backups.find(x => x.name === a.name);
+      if (q.get('refuse') === '1' || !b.mine) return { refused: b.mine ? 'not-recorded' : 'other-phone', name: a.name, serial: b.serial, model: b.model };
+      const can = b.files.filter(f => /^(boot|init_boot|vendor_boot|dtbo|vbmeta|vbmeta_system|recovery)(_[ab])?\.img$/.test(f.name));
+      for (let n = 0; n < can.length; n++) await new Promise(r => setTimeout(() => { window.fbsEvent('restorePlan', { file: can[n].name, n: n + 1, total: can.length }); r(); }, 150));
+      restorePlan = { id: 'p' + Math.random().toString(16).slice(2) };
+      const size = n => /^boot/.test(n) ? 100663296 : /^vendor_boot/.test(n) ? 100663296 : /^vbmeta/.test(n) ? 65536 : 8388608;
+      const items = b.files.map(f => {
+        const ok = can.includes(f), vb = /^vbmeta/.test(f.name);
+        return { file: f.name, partition: f.partition, state: !ok ? 'skipped' : vb ? 'optional' : 'include', reason: !ok ? 'not-allowed' : vb ? 'verified-boot' : null,
+          bytes: ok ? size(f.name) : null, check: ok ? { verdict: /^boot/.test(f.name) ? 'notice' : 'ok', canFlash: true, items: [] } : null };
+      }).concat(a.name.includes('20261015') ? [{ file: 'modem_a.img', partition: 'modem_a', state: 'skipped', reason: 'not-allowed', bytes: null, check: null }] : []);
+      items.sort((x, y) => (x.state === 'skipped') - (y.state === 'skipped'));
+      return { planId: restorePlan.id, name: a.name, serial: 'a1b2c3d4', model: '23078PND5G', slot: '_a', items, backupFirst: settings.backupFirst, free: 48318382080 };
+    },
+    'restore.run': async a => {
+      if (!restorePlan || restorePlan.id !== a.planId) throw 'check-expired';
+      restorePlan = null;
+      const ev = (l, ms) => new Promise(r => setTimeout(() => { window.fbsEvent('progress', { line: l }); r(); }, ms));
+      const parts = a.files.map(f => f.replace(/\.img$/, '')), backup = '23078PND5G_a1b2c3d4_20261126-101544', written = [];
+      for (const p of parts) await ev('backup ' + p, 120);
+      await ev('backup ok /sdcard/FastbootStudio/Backups/' + backup, 300);
+      for (let n = 0; n < parts.length; n++) {
+        const p = parts[n];
+        await ev('restore ' + (n + 1) + '/' + parts.length + ' ' + p, 150);
+        await ev('write ' + p + ' 8388608 bytes', 200);
+        if (q.get('hold') === 'restore' && n === 1) await new Promise(() => {});
+        if (q.get('rfail') === '1' && n === 1) {
+          await ev('error: verify-failed: no hash', 200);
+          return { written, failed: p, notWritten: parts.slice(n + 1), error: 'verify-failed: no hash', backup, name: a.name };
+        }
+        await ev('written ' + p, 250); await ev('verify ok ' + sha(p), 250); await ev('done ' + p, 100);
+        written.push(p);
+      }
+      return { written, failed: null, notWritten: [], error: null, backup, name: a.name };
+    },
+    'backup.export': a => new Promise(r => setTimeout(() => r({ saved: true, files: backups.find(b => b.name === a.name).files.length }), q.get('hold') === 'export' ? 1e9 : 1200)),
+    'logs.export': () => ({ saved: true }),
+    'sideload.run': async a => {
+      const total = 1288490188;
+      otgStop = false;
+      await new Promise(r => setTimeout(r, 500));
+      for (let s = 1; s <= 10; s++) {
+        await new Promise(r => setTimeout(() => { window.fbsEvent('otgProgress', { sent: Math.floor(total * s / 10), total }); r(); }, q.get('slow') === '1' ? 900 : 180));
+        if (otgStop && s < 10) throw 'cancelled';
+        if (q.get('hold') === 'side' && s === 4) await new Promise(() => {});
+        if (q.get('sfail') === '1' && s === 6) throw 'sideload-failed: the recovery refused the package';
+      }
+      return { mode: 'host', size: total };
+    },
     'otg.connect': () => new Promise(r => setTimeout(() => {
       otgPhone = { serial: '9f8e7d6c', product: 'sweet', unlocked: 'yes', userspace: false, bootloader: 'unknown', maxDownload: 268435456, slot: '_a', targets: ['boot', 'vendor_boot', 'dtbo', 'vbmeta', 'recovery'], sizesKnown: q.get('sizes') !== '0' };
       r(otgPhone);
