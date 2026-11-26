@@ -61,13 +61,20 @@ namespace FastbootStudio.Mobile.Native
         public OtgPhone Phone { get; private set; }
 
         /// <summary>The fastboot interface: class 255, subclass 66, protocol 3, with a bulk in and a bulk out.</summary>
-        static bool FastbootInterface(UsbDevice d, out UsbInterface iface, out UsbEndpoint input, out UsbEndpoint output)
+        static bool FastbootInterface(UsbDevice d, out UsbInterface iface, out UsbEndpoint input, out UsbEndpoint output) =>
+            Interface(d, 3, out iface, out input, out output);
+
+        /// <summary>The adb interface, which a recovery in "Apply update from ADB" shows: the same class and subclass, protocol 1.</summary>
+        static bool AdbInterface(UsbDevice d, out UsbInterface iface, out UsbEndpoint input, out UsbEndpoint output) =>
+            Interface(d, 1, out iface, out input, out output);
+
+        static bool Interface(UsbDevice d, int protocol, out UsbInterface iface, out UsbEndpoint input, out UsbEndpoint output)
         {
             iface = null; input = null; output = null;
             for (int i = 0; i < d.InterfaceCount; i++)
             {
                 UsbInterface f = d.GetInterface(i);
-                if ((int)f.InterfaceClass != 255 || (int)f.InterfaceSubclass != 66 || (int)f.InterfaceProtocol != 3)
+                if ((int)f.InterfaceClass != 255 || (int)f.InterfaceSubclass != 66 || (int)f.InterfaceProtocol != protocol)
                     continue;
                 UsbEndpoint @in = null, @out = null;
                 for (int e = 0; e < f.EndpointCount; e++)
@@ -92,10 +99,13 @@ namespace FastbootStudio.Mobile.Native
             JsonArray list = new JsonArray();
             foreach (UsbDevice d in usb.DeviceList?.Values ?? Enumerable.Empty<UsbDevice>())
             {
-                if (!FastbootInterface(d, out _, out _, out _))
+                bool fastboot = FastbootInterface(d, out _, out _, out _);
+                if (!fastboot && !AdbInterface(d, out _, out _, out _))
                     continue;
                 list.Add(new JsonObject
                 {
+                    // "adb": a phone with its adb interface up: a recovery waiting for a sideload, or a running phone with USB debugging on.
+                    ["mode"] = fastboot ? "fastboot" : "adb",
                     ["id"] = d.DeviceName, ["name"] = d.ProductName ?? "", ["maker"] = d.ManufacturerName ?? "",
                     ["vid"] = d.VendorId.ToString("x4"), ["pid"] = d.ProductId.ToString("x4"),
                     ["permitted"] = usb.HasPermission(d), ["open"] = openName != null && openName == d.DeviceName,
@@ -156,6 +166,21 @@ namespace FastbootStudio.Mobile.Native
             UsbDevice d = usb.DeviceList?.Values.FirstOrDefault(x => x.DeviceName == id);
             if (d == null || !FastbootInterface(d, out _, out _, out _))
                 throw new BridgeError("no-device");
+            await Permit(d);
+            return Open(d);
+        }
+
+        /// <summary>The USB permission for a phone on the cable, asked for when the app does not have it yet.</summary>
+        public Task Permit(string id)
+        {
+            UsbDevice d = usb.DeviceList?.Values.FirstOrDefault(x => x.DeviceName == id);
+            if (d == null)
+                throw new BridgeError("no-device");
+            return Permit(d);
+        }
+
+        async Task Permit(UsbDevice d)
+        {
             if (!usb.HasPermission(d))
             {
                 // Answered on the main thread; opening the phone and reading it goes on elsewhere.
@@ -168,6 +193,10 @@ namespace FastbootStudio.Mobile.Native
                 if (done != permission.Task || !permission.Task.Result || !usb.HasPermission(d))
                     throw new BridgeError("usb-denied");
             }
+        }
+
+        OtgPhone Open(UsbDevice d)
+        {
             lock (gate)
             {
                 CloseLocked();
@@ -320,6 +349,103 @@ namespace FastbootStudio.Mobile.Native
             }
         }
 
+        /// <summary>
+        /// Hands a zip to a recovery waiting in "Apply update from ADB" (adb sideload). The
+        /// permission is asked for before (<see cref="Permit(string)"/>). Returns "host" or
+        /// "stream", the way the recovery took it. Experimental: written from the protocol's
+        /// description and tried against a stand-in, not yet against every recovery.
+        /// </summary>
+        /// <param name="approve">Called when the phone on the cable is asking its owner to allow this app's key.</param>
+        public string Sideload(string id, string path, Action<long, long> progress, Action approve)
+        {
+            lock (gate)
+            {
+                UsbDevice d = usb.DeviceList?.Values.FirstOrDefault(x => x.DeviceName == id);
+                if (d == null || !AdbInterface(d, out UsbInterface iface, out UsbEndpoint input, out UsbEndpoint output))
+                    throw new BridgeError("no-device");
+                if (!usb.HasPermission(d))
+                    throw new BridgeError("usb-denied");
+                CloseLocked();
+                UsbDeviceConnection c = usb.OpenDevice(d);
+                if (c == null)
+                    throw new BridgeError("usb-open-failed");
+                if (!c.ClaimInterface(iface, true))
+                {
+                    c.Close();
+                    throw new BridgeError("usb-open-failed");
+                }
+                device = d; connection = c; claimed = iface; openName = d.DeviceName; unplugged = false;
+                CancellationTokenSource stop = new CancellationTokenSource();
+                try
+                {
+                    sending = stop;
+                    long length = new FileInfo(path).Length;
+                    Log.Add("sideload: " + Path.GetFileName(path) + " " + length + " bytes");
+                    // Before Android 9 a USB read brings at most 16384 bytes, so the recovery is told not to send more at once.
+                    AdbSideload adb = new AdbSideload(new AdbUsb(c, input, output), AdbKey(), "FastbootStudio",
+                        OperatingSystem.IsAndroidVersionAtLeast(28) ? AdbSideload.MaxDataLimit : 16384);
+                    adb.Connect(approve);
+                    Log.Add("sideload: connected, " + adb.State + ", " + adb.MaxData + " bytes a message");
+                    using (FileStream file = File.OpenRead(path))
+                        adb.Send(file, length, progress, stop.Token);
+                    Log.Add("sideload: done (" + adb.Mode + ")");
+                    return adb.Mode;
+                }
+                catch (System.OperationCanceledException)
+                {
+                    Log.Add(unplugged ? "sideload: unplugged" : "sideload: cancelled");
+                    throw new BridgeError(unplugged ? "usb-gone" : "cancelled");
+                }
+                catch (AdbException e)
+                {
+                    Log.Add("sideload: failed " + e.Message);
+                    throw new BridgeError(unplugged ? "usb-gone" : e.Code == "no-reply" || e.Code == "bad-packet" || e.Code == "bad-request" ? "sideload-lost: " + e.Message : e.Message);
+                }
+                catch (IOException e)
+                {
+                    Log.Add("sideload: failed " + e.Message);
+                    throw new BridgeError(unplugged ? "usb-gone" : "sideload-lost: " + e.Message);
+                }
+                finally
+                {
+                    sending = null;
+                    stop.Dispose();
+                    // One sideload, one connection: the recovery goes on by itself from here.
+                    CloseLocked();
+                }
+            }
+        }
+
+        /// <summary>
+        /// The app's own adb key (RSA 2048), made once and kept in the app's private files: a
+        /// recovery that asks who is connecting is shown this key to allow. Null when it cannot
+        /// be made or read, and then only a recovery that does not ask can be used.
+        /// </summary>
+        System.Security.Cryptography.RSA AdbKey()
+        {
+            try
+            {
+                string file = Path.Combine(activity.FilesDir.AbsolutePath, "adbkey");
+                System.Security.Cryptography.RSA rsa = System.Security.Cryptography.RSA.Create();
+                if (File.Exists(file))
+                {
+                    rsa.ImportRSAPrivateKey(File.ReadAllBytes(file), out _);
+                    if (rsa.KeySize == 2048)
+                        return rsa;
+                    rsa.Dispose();
+                    rsa = System.Security.Cryptography.RSA.Create();
+                }
+                rsa.KeySize = 2048;
+                File.WriteAllBytes(file, rsa.ExportRSAPrivateKey());
+                return rsa;
+            }
+            catch (Exception e)
+            {
+                Log.Add("adb key: " + e.Message);
+                return null;
+            }
+        }
+
         public void Close()
         {
             lock (gate)
@@ -377,6 +503,34 @@ namespace FastbootStudio.Mobile.Native
                 return n;
             }
         }
+    }
+
+    /// <summary>The adb interface over USB: a message's header and its data are separate transfers, read in pieces the host stack accepts.</summary>
+    sealed class AdbUsb : IAdbTransport
+    {
+        readonly UsbDeviceConnection c;
+        readonly UsbEndpoint input, output;
+        readonly int most = OperatingSystem.IsAndroidVersionAtLeast(28) ? 262144 : 16384;
+
+        public AdbUsb(UsbDeviceConnection c, UsbEndpoint input, UsbEndpoint output)
+        {
+            this.c = c; this.input = input; this.output = output;
+        }
+
+        public void Write(byte[] buffer, int offset, int count)
+        {
+            while (count > 0)
+            {
+                int written = c.BulkTransfer(output, buffer, offset, Math.Min(count, most), 30000);
+                if (written <= 0)
+                    throw new IOException("USB write failed");
+                offset += written;
+                count -= written;
+            }
+        }
+
+        public int Read(byte[] buffer, int offset, int count, int timeoutMs) =>
+            c.BulkTransfer(input, buffer, offset, Math.Min(count, most), timeoutMs);
     }
 
     /// <summary>The phone on the OTG cable as its bootloader described it.</summary>

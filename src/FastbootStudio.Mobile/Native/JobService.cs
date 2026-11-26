@@ -255,6 +255,8 @@ namespace FastbootStudio.Mobile.Native
                 case "image": return T(a, "يفلّش" + p, "Flashing" + p);
                 case "kernel": return T(a, "يثبّت الكيرنل", "Installing the kernel");
                 case "backup": return T(a, "ياخذ نسخة احتياطية", "Backing up");
+                case "restore": return T(a, "يرجّع نسخة احتياطية", "Restoring a backup");
+                case "sideload": return T(a, "يرسل ملف للريكفري", "Sending a package to recovery");
                 case "otg": return T(a, "يفلّش" + p + " على الجوال الموصول", "Flashing" + p + " on the connected phone");
                 default: return "Fastboot Studio";
             }
@@ -275,6 +277,9 @@ namespace FastbootStudio.Mobile.Native
             if (Is("write ")) return T(a, "يكتب على القسم", "Writing the partition");
             if (Is("verify ok")) return T(a, "القسم مطابق للملف", "The partition matches the file");
             if (Is("verify ")) return T(a, "يقرا القسم ويقارنه بالملف", "Reading it back to compare");
+            if (Is("restore stopped")) return null;
+            if (Is("restore done")) return null;
+            if (Is("restore ")) return T(a, "يرجّع ", "Restoring ") + line.Substring(8);
             if (Is("install ")) return T(a, "يشغّل AnyKernel3", "Running AnyKernel3");
             return null;
         }

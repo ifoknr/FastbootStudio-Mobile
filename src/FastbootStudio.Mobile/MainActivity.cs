@@ -243,14 +243,32 @@ namespace FastbootStudio.Mobile
                 pick?.TrySetResult(resultCode == Result.Ok ? data?.Data : null);
         }
 
-        /// <summary>Asks where to save a text file (the system's own "save" page) and writes it there. False when cancelled or not written.</summary>
-        public async Task<bool> SaveText(string name, string text)
+        /// <summary>Asks where to save a file (the system's own "save" page). Null when cancelled.</summary>
+        public Task<Android.Net.Uri> CreateDocument(string name, string type)
         {
             Intent intent = new Intent(Intent.ActionCreateDocument);
             intent.AddCategory(Intent.CategoryOpenable);
-            intent.SetType("text/plain");
+            intent.SetType(type);
             intent.PutExtra(Intent.ExtraTitle, name);
-            Android.Net.Uri uri = await StartPick(intent, SaveCode);
+            return StartPick(intent, SaveCode);
+        }
+
+        /// <summary>The place the person chose, to write to or to read back.</summary>
+        public Stream OpenOutput(Android.Net.Uri uri) => ContentResolver.OpenOutputStream(uri, "wt");
+
+        public Stream OpenInput(Android.Net.Uri uri) => ContentResolver.OpenInputStream(uri);
+
+        /// <summary>Removes a file the app has just created there and could not finish: half an archive is not left behind.</summary>
+        public void Discard(Android.Net.Uri uri)
+        {
+            try { DocumentsContract.DeleteDocument(ContentResolver, uri); }
+            catch (Exception e) { Native.Log.Add("could not remove " + uri + ": " + e.Message); }
+        }
+
+        /// <summary>Asks where to save a text file (the system's own "save" page) and writes it there. False when cancelled or not written.</summary>
+        public async Task<bool> SaveText(string name, string text)
+        {
+            Android.Net.Uri uri = await CreateDocument(name, "text/plain");
             if (uri == null)
                 return false;
             try

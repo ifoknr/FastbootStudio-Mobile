@@ -39,6 +39,21 @@ namespace FastbootStudio.Mobile.Native
         static readonly SemaphoreSlim busy = new SemaphoreSlim(1, 1);
         readonly Dictionary<string, Picked> picked = new Dictionary<string, Picked>(StringComparer.Ordinal);
         Pending pending;
+        PendingRestore restore;
+
+        /// <summary>A restore plan as it was shown: the only one a restore may run.</summary>
+        sealed class PendingRestore
+        {
+            public string Id = Guid.NewGuid().ToString("N"), Name;
+            public List<RestoreItem> Items;
+        }
+
+        // The list shown before the first write of a session (Core's Preflight). Kept here, for the
+        // whole app, so the page cannot skip it: a write is refused until the list was shown and
+        // nothing on it failed. "skip" is set only when everything passed and the person asked
+        // not to see it again; otherwise each showing allows one write.
+        static readonly object preflightGate = new object();
+        static bool preflightSkip, preflightShown;
 
         /// <summary>The file a running flash reads: never cleaned up under it.</summary>
         static volatile string inUse;
@@ -220,6 +235,22 @@ namespace FastbootStudio.Mobile.Native
                     return Exclusive(() => BackupCreate(a), a);
                 case "backup.space":
                     return BackupSpace();
+                case "backup.export":
+                    return await BackupExport(a);
+                case "logs.export":
+                    return await SupportExport();
+                case "restore.plan":
+                    return RestorePlan(a);
+                case "restore.run":
+                    return Exclusive(() => RestoreRun(a), a);
+                case "preflight":
+                    return PreflightList(a);
+                case "preflight.ack":
+                    return PreflightAck(a);
+                case "sideload.run":
+                    // The USB permission is asked for first; the send itself runs like every other job.
+                    await otg.Permit(Json.Str(a, "id"));
+                    return Exclusive(() => SideloadRun(a), a);
                 case "backup.verify":
                     return BackupVerify(a);
                 case "backup.delete":
@@ -355,6 +386,110 @@ namespace FastbootStudio.Mobile.Native
             int level = activity.Battery;
             if (level >= 0 && level < settings.MinBattery)
                 throw new BridgeError("low-battery");
+        }
+
+        // ---------------------------------------------------------------- before the first write
+
+        /// <summary>The partitions a job of this kind is about to write, as far as the app knows them now.</summary>
+        List<string> PreflightTargets(string kind)
+        {
+            List<string> targets = new List<string>();
+            if (kind == "image" && pending?.Kind == "image")
+                targets.Add(pending.Partition);
+            else if (kind == "kernel")
+                targets.AddRange(new[] { "boot", "init_boot", "vendor_boot", "dtbo" }.Select(b => phone.Target(b, false)).Where(p => p != null));
+            else if (kind == "restore" && restore != null)
+                targets.AddRange(restore.Items.Where(i => i.Writable).Select(i => i.Partition));
+            return targets;
+        }
+
+        List<PreflightItem> PreflightItems(string kind)
+        {
+            PreflightFacts f = new PreflightFacts
+            {
+                Kind = kind, Battery = activity.Battery, MinBattery = settings.MinBattery, Charging = phone.Charging,
+                Root = phone.Root && phone.Props != null, BackupFirst = settings.BackupFirst,
+            };
+            if (f.OtherPhone)
+            {
+                f.OtgSerial = kind == "otg" ? otg.Phone?.Serial : null;
+                f.OtgUnlocked = kind == "otg" ? otg.Phone?.Unlocked : null;
+                return Preflight.Evaluate(f);
+            }
+            if (f.Root)
+            {
+                f.Unlocked = phone.Unlocked;
+                List<string> targets = PreflightTargets(kind);
+                // A backup from today that the app itself recorded, holding every partition about to be written.
+                f.BackupToday = targets.Count > 0 && ledger.Names().Any(n => Preflight.IsFrom(n, DateTime.Now)
+                    && ledger.Get(n) is IReadOnlyDictionary<string, string> sums && targets.All(t => sums.ContainsKey(t + ".img")));
+                if (f.BackupFirst && targets.Count > 0)
+                {
+                    SuShell.Instance.Run("mkdir -p " + Sh.Q(RootFlasher.BackupRoot));
+                    f.NeedBytes = phone.Flasher.BackupBytes(targets);
+                    f.FreeBytes = phone.Flasher.FreeBytes(RootFlasher.BackupRoot);
+                }
+            }
+            return Preflight.Evaluate(f);
+        }
+
+        static string PreflightKind(JsonObject a)
+        {
+            string kind = Json.Str(a, "kind");
+            if (kind != "image" && kind != "kernel" && kind != "restore" && kind != "otg" && kind != "sideload")
+                throw new BridgeError("bad-kind");
+            return kind;
+        }
+
+        /// <summary>{needed: false} once the person asked not to see it again after a clean pass; else the list.</summary>
+        JsonNode PreflightList(JsonObject a)
+        {
+            string kind = PreflightKind(a);
+            lock (preflightGate)
+                if (preflightSkip)
+                    return new JsonObject { ["needed"] = false };
+            List<PreflightItem> items = PreflightItems(kind);
+            return new JsonObject
+            {
+                ["needed"] = true, ["blocked"] = Preflight.Blocked(items), ["allPass"] = Preflight.AllPass(items),
+                ["items"] = new JsonArray(items.Select(i => (JsonNode)new JsonObject { ["code"] = i.Code, ["level"] = i.Level, ["values"] = Json.Strings(i.Values) }).ToArray()),
+            };
+        }
+
+        /// <summary>
+        /// The person read the list and goes on. Judged again here, not taken from the page: a
+        /// fail still blocks, a warn needs the tick ("accept"), and "not again this session" is
+        /// kept only when everything passed.
+        /// </summary>
+        JsonNode PreflightAck(JsonObject a)
+        {
+            List<PreflightItem> items = PreflightItems(PreflightKind(a));
+            if (Preflight.Blocked(items))
+                throw new BridgeError("preflight-blocked");
+            bool clean = Preflight.AllPass(items);
+            if (!clean && !Json.Bool(a, "accept"))
+                throw new BridgeError("not-confirmed");
+            lock (preflightGate)
+            {
+                preflightShown = true;
+                if (clean && Json.Bool(a, "skip"))
+                    preflightSkip = true;
+            }
+            Log.Add("pre-flight: " + string.Join(", ", items.Select(i => i.Code + " " + i.Level)));
+            return null;
+        }
+
+        /// <summary>No write before the list was shown; one showing, one write.</summary>
+        static void RequirePreflight()
+        {
+            lock (preflightGate)
+            {
+                if (preflightSkip)
+                    return;
+                if (!preflightShown)
+                    throw new BridgeError("preflight-needed");
+                preflightShown = false;
+            }
         }
 
         static Consent ConsentFrom(JsonObject a, Settings settings) => new Consent
@@ -521,6 +656,7 @@ namespace FastbootStudio.Mobile.Native
             RequireRoot();
             // Before the check is taken: a low battery leaves it to be used once the phone is charged.
             RequireBattery();
+            RequirePreflight();
             Pending p = Take(a, "image");
             inUse = p.Path;
             FlashOutcome o = phone.Flasher.Flash(p.Path, p.Partition, p.Check, ConsentFrom(a, settings), phone.Identity,
@@ -556,6 +692,7 @@ namespace FastbootStudio.Mobile.Native
         {
             RequireRoot();
             RequireBattery();
+            RequirePreflight();
             Pending p = Take(a, "kernel");
             inUse = p.Path;
             AnyKernelInstaller installer = new AnyKernelInstaller(SuShell.Instance, phone.Flasher);
@@ -632,6 +769,210 @@ namespace FastbootStudio.Mobile.Native
             string folder = companion.Backup(Json.Str(a, "set"), Progress);
             RecordBackup(folder);
             return new JsonObject { ["name"] = folder };
+        }
+
+        // ---------------------------------------------------------------- a whole backup back
+
+        /// <summary>
+        /// The plan for putting a backup back as a whole: refused outright unless the app's own
+        /// record says it is this phone's and unchanged; then every image the app may write is
+        /// copied in turn and given the check a single flash gets. Nothing is written here.
+        /// </summary>
+        JsonNode RestorePlan(JsonObject a)
+        {
+            RequireRoot();
+            if (busy.CurrentCount == 0)
+                throw new BridgeError("busy");
+            string name = Json.Str(a, "name");
+            if (!BackupListing.IsName(name))
+                throw new BridgeError("not-allowed");
+            BackupEntry e = phone.Backups().FirstOrDefault(b => b.Name == name) ?? throw new BridgeError("backup-unreadable");
+            PhoneIdentity id = phone.Identity;
+            IReadOnlyDictionary<string, string> recorded = ledger.Get(name);
+            string refusal = BackupRestore.Refusal(e, recorded, id);
+            if (refusal != null)
+            {
+                Log.Add("restore " + name + " refused: " + refusal);
+                return new JsonObject { ["refused"] = refusal, ["name"] = name, ["serial"] = e.Serial, ["model"] = e.Model };
+            }
+            List<RestoreItem> plan = BackupRestore.Plan(e.Sums.Keys, phone.Partitions, phone.Props?.Slot);
+            List<RestoreItem> toCheck = plan.Where(i => i.Writable).ToList();
+            for (int n = 0; n < toCheck.Count; n++)
+            {
+                RestoreItem item = toCheck[n];
+                Event("restorePlan", new JsonObject { ["file"] = item.File, ["n"] = n + 1, ["total"] = toCheck.Count });
+                BackupFolder folder = phone.Fetch(name, item.File, inUse);
+                BackupRestore.Checked(item, folder == null ? null
+                    : ImageCheck.FromBackup(folder, item.File, item.Partition, phone.Flasher.PartitionBytes(item.Partition), id, recorded));
+                // The copy was only for the check: the write fetches it again and the flasher compares it with this check's SHA-256.
+                try { if (folder != null) File.Delete(Path.Combine(folder.Path, item.File)); } catch (IOException) { }
+            }
+            PendingRestore p = new PendingRestore { Name = name, Items = plan };
+            lock (picked)
+                restore = p;
+            Log.Add("restore plan " + name + ": " + string.Join(", ", plan.Select(i => i.File + " " + i.State + (i.Reason == null ? "" : " (" + i.Reason + ")"))));
+            List<string> writable = plan.Where(i => i.Writable).Select(i => i.Partition).ToList();
+            JsonArray items = new JsonArray();
+            foreach (RestoreItem i in plan)
+                items.Add(new JsonObject
+                {
+                    ["file"] = i.File, ["partition"] = i.Partition, ["state"] = i.State, ["reason"] = i.Reason,
+                    ["bytes"] = i.Writable ? phone.Flasher.PartitionBytes(i.Partition) : null,
+                    ["check"] = i.Check == null ? null : Json.Check(i.Check, false),
+                });
+            return new JsonObject
+            {
+                ["planId"] = p.Id, ["name"] = name, ["serial"] = id?.Serial, ["model"] = id?.Model, ["slot"] = phone.Props?.Slot, ["items"] = items,
+                ["backupFirst"] = settings.BackupFirst, ["free"] = phone.Flasher.FreeBytes(RootFlasher.BackupRoot),
+            };
+        }
+
+        JsonNode RestoreRun(JsonObject a)
+        {
+            RequireRoot();
+            RequireBattery();
+            RequirePreflight();
+            PendingRestore p;
+            lock (picked)
+            {
+                p = restore;
+                if (p == null || p.Id != Json.Str(a, "planId"))
+                    throw new BridgeError("check-expired");
+                restore = null;
+            }
+            HashSet<string> files = new HashSet<string>((a["files"] as JsonArray ?? new JsonArray()).Select(f => f?.GetValue<string>()), StringComparer.Ordinal);
+            // In the plan's own order, and only what the plan offered: a name the plan did not offer refuses the whole restore.
+            List<RestoreItem> chosen = p.Items.Where(i => i.Writable && files.Contains(i.File)).ToList();
+            if (chosen.Count != files.Count || chosen.Count == 0)
+                throw new BridgeError("not-confirmed");
+            // The backup is still what the plan was made from.
+            BackupEntry e = phone.Backups().FirstOrDefault(b => b.Name == p.Name);
+            if (BackupRestore.Refusal(e, ledger.Get(p.Name), phone.Identity) != null)
+                throw new BridgeError("check-expired");
+            inUse = Path.Combine(phone.CacheDir, "backup", p.Name) + "/";
+            RestoreOutcome o = BackupRestore.Run(chosen, file =>
+            {
+                BackupFolder folder = phone.Fetch(p.Name, file);
+                return folder == null ? null : Path.Combine(folder.Path, file);
+            }, phone.Flasher, phone.Identity, settings.BackupFirst, settings.ReadBack, Progress);
+            RecordBackup(o.BackupFolder);
+            return new JsonObject
+            {
+                ["written"] = Json.Strings(o.Written), ["failed"] = o.Failed, ["notWritten"] = Json.Strings(o.NotWritten), ["error"] = o.Error,
+                ["backup"] = o.BackupFolder == null ? null : Path.GetFileName(o.BackupFolder), ["name"] = p.Name,
+            };
+        }
+
+        // ---------------------------------------------------------------- one file to keep or send
+
+        /// <summary>
+        /// A backup folder as one tar, written where the person chooses (the system's "save"
+        /// page), then read back from there: every image in the archive must have the SHA-256
+        /// SHA256SUMS (and the app's own record) gives it, or the file is removed again.
+        /// </summary>
+        async Task<JsonNode> BackupExport(JsonObject a)
+        {
+            RequireRoot();
+            string name = Json.Str(a, "name");
+            BackupEntry e = BackupListing.IsName(name) ? phone.Backups().FirstOrDefault(b => b.Name == name) : null;
+            if (e == null || e.Sums.Count == 0)
+                throw new BridgeError("backup-unreadable");
+            Android.Net.Uri uri = await activity.CreateDocument(name + ".tar", "application/x-tar");
+            if (uri == null)
+                return new JsonObject { ["saved"] = false };
+            if (!busy.Wait(0))
+                throw new BridgeError("busy");
+            try
+            {
+                bool written;
+                using (Stream output = activity.OpenOutput(uri))
+                    written = phone.ExportTar(name, output);
+                List<string> bad = new List<string> { "SHA256SUMS" };
+                if (written)
+                    using (Stream input = activity.OpenInput(uri))
+                    {
+                        Dictionary<string, string> inside = Tar.Hashes(input);
+                        bad = Tar.Mismatches(inside, e.Sums);
+                        if (ledger.Get(name) is IReadOnlyDictionary<string, string> recorded)
+                            bad.AddRange(Tar.Mismatches(inside, recorded).Where(f => !bad.Contains(f)));
+                    }
+                if (!written || bad.Count > 0)
+                {
+                    activity.Discard(uri);
+                    Log.Add("export " + name + " failed: " + string.Join(", ", bad));
+                    throw new BridgeError("export-failed: " + string.Join(", ", bad));
+                }
+                Log.Add("export " + name + ": " + e.Sums.Count + " images in one archive, hashes checked");
+                return new JsonObject { ["saved"] = true, ["files"] = e.Sums.Count };
+            }
+            catch (Exception x) when (x is IOException || x is InvalidDataException || x is Java.IO.IOException)
+            {
+                activity.Discard(uri);
+                Log.Add("export " + name + " failed: " + x.Message);
+                throw new BridgeError("export-failed");
+            }
+            finally
+            {
+                busy.Release();
+            }
+        }
+
+        /// <summary>The app's log and the phone's details (serial masked) as one small tar, for a support message.</summary>
+        async Task<JsonNode> SupportExport()
+        {
+            string stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+            Android.Net.Uri uri = await activity.CreateDocument("fastboot-studio-support-" + stamp + ".tar", "application/x-tar");
+            if (uri == null)
+                return new JsonObject { ["saved"] = false };
+            try
+            {
+                byte[] log = System.Text.Encoding.UTF8.GetBytes(string.Join("\n", Log.All()) + "\n");
+                byte[] device = System.Text.Encoding.UTF8.GetBytes("Fastboot Studio Mobile " + activity.Version + "\n" + phone.LastDetails + "\n");
+                using (Stream output = activity.OpenOutput(uri))
+                {
+                    Tar.WriteFile(output, "log.txt", new MemoryStream(log), log.Length, DateTime.Now);
+                    Tar.WriteFile(output, "device.txt", new MemoryStream(device), device.Length, DateTime.Now);
+                    Tar.WriteEnd(output);
+                }
+                using (Stream input = activity.OpenInput(uri))
+                    if (Tar.Hashes(input).Count != 2)
+                        throw new InvalidDataException("not what was written");
+                return new JsonObject { ["saved"] = true };
+            }
+            catch (Exception x) when (x is IOException || x is InvalidDataException || x is Java.IO.IOException)
+            {
+                activity.Discard(uri);
+                Log.Add("support archive failed: " + x.Message);
+                throw new BridgeError("export-failed");
+            }
+        }
+
+        // ---------------------------------------------------------------- sideload (experimental)
+
+        JsonNode SideloadRun(JsonObject a)
+        {
+            RequireBattery();
+            RequirePreflight();
+            Picked f = PickedFile(a);
+            if (!IsZip(f.Path))
+                throw new BridgeError("not-a-zip");
+            inUse = f.Path;
+            long last = -1;
+            string mode = otg.Sideload(Json.Str(a, "id"), f.Path, (sent, total) =>
+            {
+                long percent = sent * 100 / Math.Max(1, total);
+                if (percent == last)
+                    return;
+                last = percent;
+                lock (runGate)
+                {
+                    runSent = sent;
+                    runTotal = total;
+                }
+                JobService.Step(null, null, (int)percent);
+                Event("otgProgress", new JsonObject { ["sent"] = sent, ["total"] = total });
+            }, () => Progress("approve"));
+            return new JsonObject { ["mode"] = mode, ["size"] = f.Size };
         }
 
         JsonNode BackupVerify(JsonObject a)
@@ -767,6 +1108,7 @@ namespace FastbootStudio.Mobile.Native
         {
             // This phone's battery: it is the one sending, and it must not go off half-way.
             RequireBattery();
+            RequirePreflight();
             Pending p = Take(a, "otg");
             inUse = p.Path;
             // The check was made against one phone: it is not used for another one opened since.

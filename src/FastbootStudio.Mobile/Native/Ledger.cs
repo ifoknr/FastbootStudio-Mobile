@@ -56,6 +56,13 @@ namespace FastbootStudio.Mobile.Native
             }
         }
 
+        /// <summary>The names of every backup the app has a record of.</summary>
+        public List<string> Names()
+        {
+            lock (gate)
+                return Load().Select(b => b.Key).ToList();
+        }
+
         public void Forget(string backup)
         {
             lock (gate)

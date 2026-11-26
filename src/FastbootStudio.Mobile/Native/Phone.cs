@@ -49,6 +49,7 @@ namespace FastbootStudio.Mobile.Native
             int level = battery?.GetIntProperty((int)BatteryProperty.Capacity) ?? -1;
             string slot = Props.Slot;
             BootState boot = Props.Boot(Root, kernelArgs);
+            Unlocked = boot.Unlocked;
             JsonObject o = new JsonObject
             {
                 ["root"] = Root, ["rootManager"] = manager, ["selinux"] = selinux,
@@ -59,8 +60,22 @@ namespace FastbootStudio.Mobile.Native
                 ["unlocked"] = boot.Unlocked, ["bootHidden"] = boot.Hidden, ["battery"] = level,
                 ["targets"] = Json.Strings(FlashTargets.Allowed.Where(b => FlashTargets.Resolve(b, slot, Partitions) != null)),
             };
+            // Kept for the support archive, with the serial cut to its last four characters.
+            JsonObject masked = (JsonObject)o.DeepClone();
+            string serial = Props.Serial ?? "";
+            masked["serial"] = serial.Length > 4 ? new string('*', serial.Length - 4) + serial.Substring(serial.Length - 4) : serial;
+            LastDetails = masked.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
             return o;
         }
+
+        /// <summary>What the Device page last showed, as text, serial masked.</summary>
+        public string LastDetails { get; private set; } = "";
+
+        /// <summary>The bootloader as the last refresh found it: true unlocked, false locked, null unknown.</summary>
+        public bool? Unlocked { get; private set; }
+
+        /// <summary>The battery is being charged.</summary>
+        public bool Charging => ((BatteryManager)context.GetSystemService(Context.BatteryService))?.IsCharging ?? false;
 
         /// <summary>A plain command as the app (no root).</summary>
         static string Run(string command)
@@ -115,6 +130,42 @@ namespace FastbootStudio.Mobile.Native
             if (!BackupListing.IsName(name))
                 return false;
             return su.Run("rm -rf " + Sh.Q(RootFlasher.BackupRoot + "/" + name)).Ok;
+        }
+
+        /// <summary>
+        /// Writes a backup folder into <paramref name="archive"/> as one tar: every file in it,
+        /// under the folder's name, each streamed from root's "cat" (no tar program is needed on
+        /// the phone, and nothing is held in memory). False when a file could not be read whole.
+        /// </summary>
+        public bool ExportTar(string name, Stream archive)
+        {
+            if (!BackupListing.IsName(name))
+                return false;
+            string dir = RootFlasher.BackupRoot + "/" + name;
+            ShellResult list = su.Run("cd " + Sh.Q(dir) + " && for f in *; do [ -f \"$f\" ] && echo \"$(stat -c %s \"$f\") $f\"; done; true");
+            if (!list.Ok)
+                return false;
+            int files = 0;
+            foreach (string line in Sh.Lines(list.Output))
+            {
+                int space = line.IndexOf(' ');
+                if (space <= 0 || !long.TryParse(line.Substring(0, space), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out long size))
+                    return false;
+                string file = line.Substring(space + 1);
+                if (file.Contains('/') || file.StartsWith(".", StringComparison.Ordinal))
+                    continue;
+                bool whole = true;
+                bool ran = su.Stream("cat " + Sh.Q(dir + "/" + file), s =>
+                {
+                    try { Tar.WriteFile(archive, name + "/" + file, s, size, DateTime.Now); }
+                    catch (EndOfStreamException) { whole = false; }
+                });
+                if (!ran || !whole)
+                    return false;
+                files++;
+            }
+            Tar.WriteEnd(archive);
+            return files > 0;
         }
 
         /// <summary>

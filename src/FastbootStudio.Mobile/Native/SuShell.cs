@@ -98,6 +98,34 @@ namespace FastbootStudio.Mobile.Native
             }
         }
 
+        /// <summary>
+        /// Runs a script as root and hands its output to <paramref name="read"/> as a stream, as
+        /// it comes: for a file too big to hold (an image going into an archive).
+        /// </summary>
+        public bool Stream(string script, Action<Stream> read)
+        {
+            Log.Add("$ " + script);
+            try
+            {
+                using (Process p = Start())
+                {
+                    p.StandardInput.Write(script + "\nexit $?\n");
+                    p.StandardInput.Close();
+                    Task<string> error = p.StandardError.ReadToEndAsync();
+                    read(p.StandardOutput.BaseStream);
+                    p.WaitForExit();
+                    if (p.ExitCode != 0)
+                        Log.Add("  exit " + p.ExitCode + ": " + error.Result.Trim());
+                    return p.ExitCode == 0;
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Add("  stream failed: " + e.Message);
+                return false;
+            }
+        }
+
         /// <summary>True when su gives uid 0.</summary>
         public bool Available()
         {
